@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 106 156" width="106mm" height="156mm">
+  <defs>
+    <radialGradient id="cafe" cx="50%" cy="45%" r="60%">
+      <stop offset="0" stop-color="#7A4A2A"/>
+      <stop offset="1" stop-color="#3B2314"/>
+    </radialGradient>
+    <path id="onda" d="M0 0 a6 6 0 0 1 0 8" fill="none" stroke="#3B2314" stroke-width="1.1" stroke-linecap="round"/>
+  </defs>
+  <rect x="-3" y="-3" width="106" height="156" fill="#F4EBDD"/>
+  <rect x="-3" y="118" width="106" height="35" fill="#3B2314"/>
+  <rect id="logo-slot" x="30" y="8" width="40" height="20" fill="none"/>
+  <text x="50" y="40" text-anchor="middle" font-family="DM Serif Display" font-style="italic" font-size="7.5" fill="#3B2314">¿Te gustó el café?</text>
+  <text x="50" y="47" text-anchor="middle" font-family="Montserrat" font-weight="600" font-size="3.2" letter-spacing="0.4" fill="#7A4A2A">CONTALO EN GOOGLE MAPS</text>
+  <path d="M44 60 q-4 -5 0 -9 q4 -4 0 -8" fill="none" stroke="#B89A7A" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M56 60 q-4 -5 0 -9 q4 -4 0 -8" fill="none" stroke="#B89A7A" stroke-width="1.2" stroke-linecap="round"/>
+  <ellipse cx="50" cy="96" rx="27" ry="6" fill="#E2D3BF"/>
+  <circle cx="50" cy="80" r="19" fill="#FFFFFF" stroke="#E2D3BF" stroke-width="1.5"/>
+  <circle cx="50" cy="80" r="15.5" fill="url('#cafe')"/>
+  <circle id="nfc-zone" cx="50" cy="80" r="14" fill="none"/>
+  <use href="#onda" x="44" y="76"/>
+  <use href="#onda" x="47" y="74" transform="scale(1)"/>
+  <text x="50" y="108" text-anchor="middle" font-family="Montserrat" font-weight="800" font-size="3.4" fill="#3B2314">ACERCÁ TU CELULAR ACÁ</text>
+  <rect id="qr-slot" x="74" y="124" width="20" height="20" fill="none"/>
+  <text x="8" y="131" font-family="Montserrat" font-weight="600" font-size="3.2" fill="#F4EBDD">¿Sin NFC?</text>
+  <text x="8" y="136" font-family="Montserrat" font-size="3.2" fill="#F4EBDD">Escaneá el QR</text>
+  <text x="8" y="143" font-family="DM Serif Display" font-style="italic" font-size="3.6" fill="#E2D3BF">Tu opinión nos ayuda a crecer</text>
+</svg>
