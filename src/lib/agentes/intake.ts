@@ -53,7 +53,7 @@ export const intake: Agente = async ({ comercio, pedido }) => {
   } catch (e) {
     return faltaLogo(`No se pudo leer el logo (${e instanceof Error ? e.message : String(e)}). Subí otro archivo.`);
   }
-  const { png, vista, info } = procesado;
+  const { png, vista, info, aviso } = procesado;
   const base = `comercios/${comercio.id}`;
   const path = `${base}/logo.png`;
   const vistaPath = `${base}/logo-vista.png`;
@@ -73,7 +73,7 @@ export const intake: Agente = async ({ comercio, pedido }) => {
   const vigente = fecha && Date.now() - new Date(fecha).getTime() < DIAS_INVESTIGACION_VIGENTE * 86_400_000;
   return {
     salida: { logo: info as unknown as Json, investigacion_vigente: !!vigente },
-    resumen: `Logo listo: ${info.ancho}×${info.alto} px, ${fondo}, colores ${info.colores.join(' ') || '—'}.${vigente ? ' La investigación del comercio está al día: se pasa directo a la inspiración.' : ''}`,
+    resumen: `Logo listo: ${info.ancho}×${info.alto} px, ${fondo}, colores ${info.colores.join(' ') || '—'}.${aviso ? ` ${aviso}` : ''}${vigente ? ' La investigación del comercio está al día: se pasa directo a la inspiración.' : ''}`,
     siguientes: [{ tipo: vigente ? 'inspiracion' : 'investigacion' }],
     pedidoEtapa: vigente ? 'inspiracion' : 'investigacion',
   };

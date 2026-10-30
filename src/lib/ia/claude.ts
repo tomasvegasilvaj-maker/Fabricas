@@ -38,8 +38,28 @@ function anthropic() {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new ErrorPaso('Falta la clave de Anthropic (ANTHROPIC_API_KEY) en Vercel.', false);
   }
-  cliente ??= new Anthropic({ maxRetries: 2 });
+  // Una clave que no está atada a un workspace tiene que decir en cuál trabajar (si no, la API contesta 400).
+  const workspace = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  cliente ??= new Anthropic({ maxRetries: 2, ...(workspace ? { defaultHeaders: { 'anthropic-workspace-id': workspace } } : {}) });
   return cliente;
+}
+
+/** Lo que contestó Anthropic (tipo, mensaje y n.º de request) para mostrarlo en la Previa. Nunca trae la clave. */
+function motivoApi(e: InstanceType<typeof Anthropic.APIError>) {
+  const cuerpo = (e.error as { error?: { message?: unknown } } | undefined)?.error;
+  const mensaje = typeof cuerpo?.message === 'string' ? cuerpo.message : e.message;
+  return `${e.type ? `${e.type}: ` : ''}${mensaje}${e.requestID ? ` (${e.requestID})` : ''}`;
+}
+
+/** Chequeo gratis (no gasta tokens) de que la clave anda y el modelo está habilitado. Lo usa /api/salud. */
+export async function chequearIA(): Promise<{ ok: boolean; motivo?: string }> {
+  try {
+    await anthropic().models.retrieve(MODELO, {}, { timeout: 8000, maxRetries: 0 });
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof Anthropic.APIError) return { ok: false, motivo: `${e.status ?? 'sin conexión'} ${motivoApi(e)}` };
+    return { ok: false, motivo: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 async function sumarCosto(ctx: ContextoIA, usd: number) {
@@ -48,17 +68,21 @@ async function sumarCosto(ctx: ContextoIA, usd: number) {
   if (error) console.error('No se pudo sumar el costo:', error.message);
 }
 
-function traducirError(e: unknown, porTiempo: boolean): ErrorPaso {
+/** Pasa un error de la API a un ErrorPaso con el motivo que dio Anthropic (exportada para las pruebas). */
+export function traducirError(e: unknown, porTiempo: boolean): ErrorPaso {
   if (e instanceof ErrorPaso) return e;
   if (porTiempo || e instanceof Anthropic.APIUserAbortError) {
     return new ErrorPaso('La llamada a la IA tardó más de lo que permite una vuelta del motor y se cortó.', true, 5);
   }
   if (e instanceof Anthropic.APIError) {
     const s = e.status;
-    if (s === 401 || s === 403) return new ErrorPaso('La clave de Anthropic no es válida o no tiene permisos (revisá ANTHROPIC_API_KEY).', false);
+    const motivo = motivoApi(e);
+    console.error(`Anthropic contestó ${s ?? 'sin conexión'}: ${motivo}`);
+    if (s === 401) return new ErrorPaso(`Anthropic no aceptó la clave (${motivo}). Cambiá ANTHROPIC_API_KEY en Vercel y volvé a desplegar.`, false);
+    if (s === 403) return new ErrorPaso(`Anthropic no deja usar esta clave para este paso (${motivo}).`, false);
     if (s === 429) return new ErrorPaso('La API de Anthropic pidió esperar (límite de uso). Se reintenta solo.', true, 120);
-    if (s !== undefined && s >= 400 && s < 500) return new ErrorPaso(`La API de Anthropic rechazó el pedido (${s}): ${e.message}`, false);
-    return new ErrorPaso(`La API de Anthropic falló (${s ?? 'sin conexión'}): ${e.message}`, true, 60);
+    if (s !== undefined && s >= 400 && s < 500) return new ErrorPaso(`La API de Anthropic rechazó el pedido (${s}): ${motivo}`, false);
+    return new ErrorPaso(`La API de Anthropic falló (${s ?? 'sin conexión'}): ${motivo}`, true, 60);
   }
   return new ErrorPaso(e instanceof Error ? e.message : String(e), true, 60);
 }
