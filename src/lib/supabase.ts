@@ -68,7 +68,8 @@ export async function registrarArchivo(a: {
           meta: a.meta ?? {},
         },
         { onConflict: 'path' },
-      ),
+      )
+      .select('id'),
     'registrar archivo',
   );
 }
