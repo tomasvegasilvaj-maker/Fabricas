@@ -1,5 +1,5 @@
-import sharp from 'sharp';
 import { procesarLogo } from '../placa/logo';
+import { renderizar } from '../placa/render';
 import { bajarArchivo, db, registrarArchivo, revisar, subirArchivo } from '../supabase';
 import type { Json } from '../tipos-db';
 import type { Agente, ResultadoPaso } from '../motor/tipos';
@@ -26,14 +26,12 @@ function faltaLogo(detalle: string): ResultadoPaso {
   };
 }
 
-/** Logo de mentira para los pedidos de prueba que llegan sin logo. */
+/** Logo de mentira para los pedidos de prueba que llegan sin logo (con resvg y las fuentes propias: en Vercel sharp no tiene fuentes). */
 async function logoDePrueba(nombre: string) {
   const texto = nombre.replace(/[<&>"]/g, '').slice(0, 18).toUpperCase();
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="300"><text x="400" y="190" font-family="Montserrat" font-weight="800" font-size="96" text-anchor="middle" fill="#2B2B2B">${texto}</text></svg>`;
-  return sharp({ create: { width: 800, height: 300, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-    .composite([{ input: Buffer.from(svg) }])
-    .png()
-    .toBuffer();
+  // 1400 px de ancho: entran 18 letras anchas a 72 px sin cortarse (la recepción después recorta lo transparente).
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="300" viewBox="0 0 1400 300"><text x="700" y="180" font-family="Montserrat" font-weight="800" font-size="72" text-anchor="middle" fill="#2B2B2B">${texto}</text></svg>`;
+  return (await renderizar(svg, 1400)).png;
 }
 
 /** Recepción: prepara el logo original (sin redibujarlo) y decide si hace falta investigar. */
