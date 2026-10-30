@@ -21,7 +21,7 @@ import {
   seguirConTope,
   seguirSinBoceto,
 } from '@/lib/motor/previas';
-import { COOKIE_SESION, crearSesion, DURACION_SESION_SEG, mismaClave } from '@/lib/sesion';
+import { COOKIE_SESION, crearSesion, DURACION_SESION_SEG, mismaClave, secretoSesion } from '@/lib/sesion';
 import { db } from '@/lib/supabase';
 
 export type EstadoAccion = { error?: string; ok?: string } | null;
@@ -58,8 +58,8 @@ async function exigirSesion() {
 
 export async function entrar(_: EstadoAccion, fd: FormData): Promise<EstadoAccion> {
   const clave = process.env.APP_PASSWORD;
-  const secreto = process.env.SESSION_SECRET;
-  if (!clave || !secreto) return { error: 'Falta configurar APP_PASSWORD y SESSION_SECRET en Vercel.' };
+  const secreto = await secretoSesion();
+  if (!clave || !secreto) return { error: 'Falta configurar APP_PASSWORD y SUPABASE_SERVICE_ROLE_KEY en Vercel.' };
   if (!(await mismaClave(texto(fd, 'clave'), clave))) {
     await new Promise((r) => setTimeout(r, 700));
     return { error: 'Clave incorrecta.' };

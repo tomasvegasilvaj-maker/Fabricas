@@ -5,6 +5,7 @@ import type { Json } from '../tipos-db';
 import { AGENTES, AGENTES_SIMULADOS } from '../agentes';
 import { NOMBRE_PASO } from './flujo';
 import { patearMotor } from './patear';
+import { anotarUrlDelLatido } from './secreto';
 import { autoResolverPrevias } from './previas';
 import { PASOS_CON_IA, TIPOS_PASO, type ContextoPaso, type TipoPaso } from './tipos';
 
@@ -31,6 +32,7 @@ export async function contarPasosDisponibles(): Promise<number> {
  */
 export async function correrMotor(inicio = Date.now()): Promise<number> {
   const hasta = inicio + (env.duracionMaxSeg - 20) * 1000;
+  await anotarUrlDelLatido(env.appUrl);
   let corridos = 0;
   for (;;) {
     const restanteSeg = (hasta - Date.now()) / 1000;

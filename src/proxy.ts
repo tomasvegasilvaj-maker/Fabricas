@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { COOKIE_SESION, sesionValida } from './lib/sesion';
+import { COOKIE_SESION, secretoSesion, sesionValida } from './lib/sesion';
 
 export async function proxy(req: NextRequest) {
-  const secreto = process.env.SESSION_SECRET;
+  const secreto = await secretoSesion();
   if (secreto && (await sesionValida(req.cookies.get(COOKIE_SESION)?.value, secreto))) return NextResponse.next();
   if (req.nextUrl.pathname.startsWith('/api/')) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   const login = new URL('/login', req.url);

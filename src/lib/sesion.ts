@@ -46,6 +46,18 @@ export async function mismaClave(ingresada: string, real: string) {
   return igualesSeguro(a, b);
 }
 
+/**
+ * Clave para firmar la cookie: SESSION_SECRET si está; si no, una derivada de la clave de Supabase y de
+ * APP_PASSWORD (así no hay que inventar otra, y cambiar la contraseña cierra las sesiones abiertas).
+ */
+export async function secretoSesion(): Promise<string | null> {
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  const base = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const contrasena = process.env.APP_PASSWORD;
+  if (!base || !contrasena) return null;
+  return firmar(`fab:sesion:${contrasena}`, base);
+}
+
 /** Bearer token de las rutas internas (motor, webhook). */
 export function bearerValido(cabecera: string | null, secreto: string | null) {
   if (!secreto || !cabecera?.startsWith('Bearer ')) return false;

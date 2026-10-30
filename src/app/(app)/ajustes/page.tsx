@@ -6,6 +6,7 @@ import { SinBase } from '@/componentes/SinBase';
 import { faltaBase } from '@/lib/configuracion';
 import { loteQr, preferencias } from '@/lib/consultas';
 import { env } from '@/lib/env';
+import { estadoLatido } from '@/lib/motor/secreto';
 
 export const metadata: Metadata = { title: 'Ajustes' };
 
@@ -13,8 +14,6 @@ const VARIABLES: { nombre: string; para: string; obligatoria: boolean }[] = [
   { nombre: 'SUPABASE_URL', para: 'Base de datos y archivos', obligatoria: true },
   { nombre: 'SUPABASE_SERVICE_ROLE_KEY', para: 'Base de datos y archivos (clave de servicio)', obligatoria: true },
   { nombre: 'APP_PASSWORD', para: 'Tu clave para entrar a la app', obligatoria: true },
-  { nombre: 'SESSION_SECRET', para: 'Firma de la sesión', obligatoria: true },
-  { nombre: 'MOTOR_SECRET', para: 'Con esta clave el reloj de Supabase despierta al motor', obligatoria: true },
   { nombre: 'ANTHROPIC_API_KEY', para: 'Los agentes de IA', obligatoria: true },
   { nombre: 'GOOGLE_PLACES_API_KEY', para: 'Datos y fotos de Google Maps (sin esto investiga solo en la web)', obligatoria: false },
   { nombre: 'WEBHOOK_SECRET', para: 'Cargar pedidos desde n8n, Make u otro sistema', obligatoria: false },
@@ -30,7 +29,7 @@ function fecha(iso: string | null) {
 
 export default async function Ajustes() {
   const conBase = !faltaBase();
-  const [prefs, lote] = conBase ? await Promise.all([preferencias(), loteQr()]) : [[], []];
+  const [prefs, lote, latido] = conBase ? await Promise.all([preferencias(), loteQr(), estadoLatido().catch(() => null)]) : [[], [], null];
   const conteo = lote.reduce<Record<string, number>>((acc, q) => ({ ...acc, [q.estado]: (acc[q.estado] ?? 0) + 1 }), {});
   const proximo = lote.find((q) => q.estado === 'libre');
 
@@ -62,6 +61,17 @@ export default async function Ajustes() {
         <dl className="ficha">
           <dt>Tope de IA por placa</dt>
           <dd>US$ {env.topeUsd.toFixed(2)} (TOPE_USD_POR_PLACA)</dd>
+          <dt>Latido de Supabase</dt>
+          <dd>
+            {!latido
+              ? '—'
+              : !latido.clave
+                ? 'falta crear su clave en Vault (SQL del README)'
+                : !latido.url
+                  ? 'se activa solo cuando corra el motor en producción'
+                  : `llama a ${latido.url}`}
+            {latido?.ultima && <span className="muted"> · corrió {fecha(latido.ultima)} {new Date(latido.ultima).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Cordoba' })}</span>}
+          </dd>
           <dt>Webhook de pedidos</dt>
           <dd className="mono small">POST {env.appUrl}/api/webhook/pedido</dd>
           <dt>Estado</dt>

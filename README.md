@@ -38,21 +38,21 @@ Cargás el comercio y su logo. La fábrica investiga el negocio, busca inspiraci
    | `SUPABASE_SERVICE_ROLE_KEY` | Clave secreta de Supabase (Settings → API keys). Solo servidor | obligatoria |
    | `ANTHROPIC_API_KEY` | Los agentes (console.anthropic.com → API keys) | obligatoria |
    | `APP_PASSWORD` | Tu clave para entrar | obligatoria |
-   | `SESSION_SECRET` | Firma de la sesión (texto largo al azar) | obligatoria |
-   | `MOTOR_SECRET` | Clave con la que el cron despierta al motor (texto largo al azar) | obligatoria |
-   | `APP_URL` | URL de producción, sin barra final | recomendada |
+   | `APP_URL` | URL de producción, sin barra final (si falta, usa la de Vercel) | opcional |
    | `GOOGLE_PLACES_API_KEY` | Place ID, fotos del local y link directo de reseñas | opcional |
    | `WEBHOOK_SECRET` | Habilita `POST /api/webhook/pedido` | opcional |
    | `TOPE_USD_POR_PLACA` | Tope de IA por placa (por defecto 2.5) | opcional |
+   | `SESSION_SECRET` | Firma de la sesión. Si falta, se arma con la clave de Supabase y `APP_PASSWORD` | opcional |
 
-3. **Latido del cron.** Guardar en Supabase Vault la URL de producción y el mismo `MOTOR_SECRET`:
+   No hay que inventar ninguna otra clave: la app se despierta a sí misma con una clave derivada de la de Supabase, y el latido del cron usa una que vive en Vault (paso 3).
+
+3. **Latido del cron.** Una sola vez, en Supabase → SQL Editor:
 
    ```sql
-   select vault.create_secret('https://TU-APP.vercel.app', 'fab_app_url');
-   select vault.create_secret('EL_MISMO_MOTOR_SECRET', 'fab_motor_secret');
+   select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'fab_motor_secret', 'Clave del latido de la fábrica');
    ```
 
-   Sin esto la fábrica igual anda (la app despierta al motor sola), pero el cron es lo que retoma pasos colgados.
+   La clave se genera adentro de la base y nadie la tiene que ver ni copiar. La URL a la que llama el latido la anota la app de producción sola (`fab_config`) la primera vez que corre el motor. Sin el latido la fábrica igual anda, porque la app se despierta sola, pero el cron es lo que retoma los reintentos y los pasos colgados. Su estado se ve en Ajustes.
 4. **Probar.** Abrir `/api/salud` (tiene que dar `"ok": true`), entrar con `APP_PASSWORD` y cargar un pedido con «Prueba sin IA»: corre toda la línea con agentes simulados, sin gastar IA y sin activar QR reales.
 
 ## Webhook de pedidos

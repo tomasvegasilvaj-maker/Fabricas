@@ -1,4 +1,5 @@
 import { env } from '../env';
+import { claveInterna } from './secreto';
 
 /** URL de esta misma app para despertar al motor (en Preview, la del deploy; en producción, la principal). */
 function urlPropia() {
@@ -14,7 +15,9 @@ function urlPropia() {
  */
 export async function patearMotor(n = 1) {
   if (n <= 0) return;
-  const headers: Record<string, string> = { Authorization: `Bearer ${env.motorSecret}`, 'Content-Type': 'application/json' };
+  const secreto = claveInterna();
+  if (!secreto) return;
+  const headers: Record<string, string> = { Authorization: `Bearer ${secreto}`, 'Content-Type': 'application/json' };
   if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) headers['x-vercel-protection-bypass'] = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   const url = `${urlPropia()}/api/motor`;
   const resultados = await Promise.allSettled(

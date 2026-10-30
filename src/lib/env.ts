@@ -16,12 +16,6 @@ export const env = {
   get appPassword() {
     return obligatoria('APP_PASSWORD');
   },
-  get sessionSecret() {
-    return obligatoria('SESSION_SECRET');
-  },
-  get motorSecret() {
-    return obligatoria('MOTOR_SECRET');
-  },
   get webhookSecret() {
     return process.env.WEBHOOK_SECRET || null;
   },
@@ -47,9 +41,9 @@ export const env = {
 /** Qué falta configurar para que la fábrica funcione (se muestra en la app en vez de romper). */
 export function configuracionFaltante(): string[] {
   const faltan: string[] = [];
-  for (const nombre of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'APP_PASSWORD', 'SESSION_SECRET', 'MOTOR_SECRET']) {
+  // SESSION_SECRET y la clave del motor no hacen falta: se derivan de la clave de Supabase o viven en Vault.
+  for (const nombre of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'APP_PASSWORD', 'ANTHROPIC_API_KEY']) {
     if (!process.env[nombre]) faltan.push(nombre);
   }
-  if (!process.env.ANTHROPIC_API_KEY) faltan.push('ANTHROPIC_API_KEY');
   return faltan;
 }

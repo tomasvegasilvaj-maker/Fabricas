@@ -163,6 +163,12 @@ export type PreferenciaRow = {
   tipo: string;
 };
 
+export type ConfigRow = {
+  clave: string;
+  updated_at: string;
+  valor: string;
+};
+
 type Opcional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
 export type Database = {
@@ -221,6 +227,7 @@ export type Database = {
         Partial<Omit<EventoRow, 'id'>>
       >;
       fab_qr_lote: Tabla<QrLoteRow, Opcional<QrLoteRow, 'asignado_at' | 'comercio' | 'estado' | 'pedido_id'>>;
+      fab_config: Tabla<ConfigRow, Opcional<ConfigRow, 'updated_at'>>;
       fab_preferencias: Tabla<
         PreferenciaRow,
         Opcional<PreferenciaRow, 'id' | 'created_at' | 'activo' | 'origen' | 'rubro' | 'tipo'>
@@ -248,6 +255,8 @@ export type Database = {
         Returns: boolean;
       };
       fab_fallo_generico: { Args: { p_error: string; p_paso: string }; Returns: undefined };
+      fab_secreto_motor: { Args: Record<string, never>; Returns: string };
+      fab_estado_latido: { Args: Record<string, never>; Returns: Json };
       fab_frenar_por_tope: { Args: { p_intento: number; p_paso: string }; Returns: boolean };
       fab_reprogramar_paso: {
         Args: { p_error: string; p_intento: number; p_paso: string; p_segundos: number };
