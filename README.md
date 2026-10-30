@@ -36,7 +36,8 @@ Cargás el comercio y su logo. La fábrica investiga el negocio, busca inspiraci
    |----------|----------|---|
    | `SUPABASE_URL` | `https://izdfvzjkypcqxuspsxsm.supabase.co` | obligatoria |
    | `SUPABASE_SERVICE_ROLE_KEY` | Clave secreta de Supabase (Settings → API keys). Solo servidor | obligatoria |
-   | `ANTHROPIC_API_KEY` | Los agentes (console.anthropic.com → API keys) | obligatoria |
+   | `ANTHROPIC_API_KEY` | Los agentes (platform.claude.com/settings/keys → Create key, atada al workspace Default) | obligatoria |
+   | `ANTHROPIC_WORKSPACE_ID` | Solo si la clave de Anthropic no está atada a un workspace (`wrkspc_…`, en Settings → Workspaces) | opcional |
    | `APP_PASSWORD` | Tu clave para entrar | obligatoria |
    | `APP_URL` | URL de producción, sin barra final (si falta, usa la de Vercel) | opcional |
    | `GOOGLE_PLACES_API_KEY` | Place ID, fotos del local y link directo de reseñas | opcional |

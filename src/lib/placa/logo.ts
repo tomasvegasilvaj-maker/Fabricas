@@ -16,7 +16,13 @@ export type InfoLogo = {
   formatoOriginal: string;
 };
 
-export type LogoProcesado = { png: Buffer; vista: Buffer; info: InfoLogo };
+export type LogoProcesado = {
+  png: Buffer;
+  vista: Buffer;
+  info: InfoLogo;
+  /** Algo del archivo que conviene que mires (ej. venía incompleto y se abrió igual). */
+  aviso?: string;
+};
 
 export const MIMES_LOGO = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif', 'image/avif'];
 const LADO_MAX = 1600;
@@ -31,6 +37,43 @@ function distancia(a: number[], b: number[]) {
 
 function esSvg(datos: Buffer, mime: string) {
   return mime === 'image/svg+xml' || /^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(datos.subarray(0, 2048).toString('utf8'));
+}
+
+/** true si la última fila de la imagen (como está guardada, sin girar) es el gris parejo que deja un JPG cortado. */
+async function franjaGrisAbajo(entrada: Buffer) {
+  const { width, height } = await sharp(entrada).metadata();
+  if (!width || !height) return true;
+  const fila = await sharp(entrada, { failOn: 'none' })
+    .extract({ left: 0, top: height - 1, width, height: 1 })
+    .removeAlpha()
+    .toColourspace('srgb')
+    .raw()
+    .toBuffer();
+  return fila.every((v) => v === 128);
+}
+
+/**
+ * Abre la imagen derecha y a lo sumo de LADO_MAX. Un JPG al que le falta el final (no terminó de
+ * bajarse o la app que lo guardó no le puso el cierre) se abre igual, salvo que esté cortado a la
+ * mitad: ahí abajo queda una franja gris pareja y no sirve como logo.
+ */
+async function abrir(entrada: Buffer) {
+  const convertir = (failOn: 'error' | 'none') =>
+    sharp(entrada, { failOn, animated: false })
+      .rotate()
+      .resize({ width: LADO_MAX, height: LADO_MAX, fit: 'inside', withoutEnlargement: true })
+      .ensureAlpha()
+      .png()
+      .toBuffer();
+  try {
+    return { base: await convertir('error'), incompleto: false };
+  } catch (e) {
+    if (!/premature end of JPEG/i.test(e instanceof Error ? e.message : String(e))) throw e;
+  }
+  if (await franjaGrisAbajo(entrada)) {
+    throw new Error('el JPG está cortado: le falta la parte de abajo, pasa cuando la imagen no terminó de bajarse');
+  }
+  return { base: await convertir('none'), incompleto: true };
 }
 
 /**
@@ -50,12 +93,7 @@ export async function procesarLogo(datos: Buffer, mime: string): Promise<LogoPro
     entrada = img.asPng();
   }
 
-  const base = await sharp(entrada, { failOn: 'error', animated: false })
-    .rotate()
-    .resize({ width: LADO_MAX, height: LADO_MAX, fit: 'inside', withoutEnlargement: true })
-    .ensureAlpha()
-    .png()
-    .toBuffer();
+  const { base, incompleto } = await abrir(entrada);
 
   const { data, info } = await sharp(base).raw().toBuffer({ resolveWithObject: true });
   const { width: ancho, height: alto } = info;
@@ -124,6 +162,7 @@ export async function procesarLogo(datos: Buffer, mime: string): Promise<LogoPro
       colores: await coloresPrincipales(recortado, fondo),
       formatoOriginal,
     },
+    ...(incompleto ? { aviso: 'El archivo del logo venía incompleto y se abrió igual: fijate que se vea entero; si no, subí un PNG.' } : {}),
   };
 }
 

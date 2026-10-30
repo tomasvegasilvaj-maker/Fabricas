@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import sharp from 'sharp';
 import { faltaBase } from '@/lib/configuracion';
 import { configuracionFaltante } from '@/lib/env';
+import { chequearIA } from '@/lib/ia/claude';
 import { archivosDeFuentes } from '@/lib/placa/fuentes';
 import { renderizar } from '@/lib/placa/render';
 import { db } from '@/lib/supabase';
@@ -14,7 +15,7 @@ const SVG_PRUEBA = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 156
   <circle cx="53" cy="105" r="14" fill="#c2185b"/>
 </svg>`;
 
-/** Chequeo rápido después de cada despliegue: dibujo de placas, fuentes, base y variables (sin mostrar valores). */
+/** Chequeo rápido después de cada despliegue: dibujo de placas, fuentes, base, clave de Anthropic y variables (sin mostrar valores). */
 export async function GET() {
   const t0 = Date.now();
   let render: { ok: boolean; ms?: number; error?: string };
@@ -32,10 +33,12 @@ export async function GET() {
     base = error ? 'error' : 'ok';
   }
 
+  // Pregunta por el modelo con la clave: no gasta tokens y avisa si la clave no anda.
+  const ia = await chequearIA();
   const fuentes = archivosDeFuentes().length;
   const faltan = configuracionFaltante();
   return NextResponse.json(
-    { ok: render.ok && fuentes > 0 && base === 'ok' && faltan.length === 0, faltan, base, fuentes, render, version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local' },
+    { ok: render.ok && fuentes > 0 && base === 'ok' && ia.ok && faltan.length === 0, faltan, base, ia, fuentes, render, version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local' },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

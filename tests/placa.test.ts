@@ -177,6 +177,20 @@ describe('logo', () => {
     expect(s.info.formatoOriginal).toBe('image/svg+xml');
     expect(s.info.fondo).toBe('#000000');
   });
+
+  it('abre un JPG al que le falta el final y frena uno cortado a la mitad', async () => {
+    const jpg = await sharp({ create: { width: 600, height: 400, channels: 3, background: '#FFFFFF' } })
+      .composite([{ input: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><circle cx="300" cy="200" r="150" fill="#E30613"/></svg>') }])
+      .jpeg()
+      .toBuffer();
+    expect((await procesarLogo(jpg, 'image/jpeg')).aviso).toBeUndefined();
+
+    const sinCierre = await procesarLogo(jpg.subarray(0, jpg.length - 2), 'image/jpeg');
+    expect(sinCierre.aviso).toMatch(/incompleto/);
+    expect(sinCierre.info.fondo).toBe('#FFFFFF');
+
+    await expect(procesarLogo(jpg.subarray(0, Math.floor(jpg.length * 0.6)), 'image/jpeg')).rejects.toThrow(/cortado/);
+  });
 });
 
 describe('pdf', () => {
