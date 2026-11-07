@@ -4,6 +4,14 @@
 export const COOKIE_SESION = 'fab_sesion';
 export const DURACION_SESION_SEG = 60 * 60 * 24 * 30;
 
+/**
+ * Modo vista: sin contraseña se puede mirar todo (por ejemplo, para mostrársela a otras IAs), pero
+ * cargar, aprobar o cambiar algo sigue pidiendo entrar. Se cierra con VISTA_PUBLICA=no en Vercel.
+ */
+export function vistaPublica() {
+  return process.env.VISTA_PUBLICA?.trim().toLowerCase() !== 'no';
+}
+
 const codificador = new TextEncoder();
 
 function aBase64Url(bytes: ArrayBuffer): string {

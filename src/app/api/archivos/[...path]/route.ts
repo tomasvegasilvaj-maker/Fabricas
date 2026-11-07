@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { haySesion } from '@/lib/auth';
+import { vistaPublica } from '@/lib/sesion';
 import { bajarArchivo } from '@/lib/supabase';
 
 const TIPOS: Record<string, string> = {
@@ -14,9 +15,9 @@ const TIPOS: Record<string, string> = {
   json: 'application/json',
 };
 
-/** Sirve los archivos privados del almacenamiento (vistas previas, PDFs) solo con sesión. */
+/** Sirve los archivos privados del almacenamiento (vistas previas, PDFs) con sesión o en modo vista. */
 export async function GET(req: Request, { params }: { params: Promise<{ path: string[] }> }) {
-  if (!(await haySesion())) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  if (!vistaPublica() && !(await haySesion())) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   const partes = (await params).path;
   if (!partes.length || partes.some((p) => !p || p === '.' || p === '..' || p.includes('\\')) || !['pedidos', 'comercios'].includes(partes[0])) {
     return NextResponse.json({ error: 'Ruta inválida' }, { status: 400 });

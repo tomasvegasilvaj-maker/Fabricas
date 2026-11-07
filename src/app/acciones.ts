@@ -53,7 +53,7 @@ function despertarMotor() {
 }
 
 async function exigirSesion() {
-  if (!(await haySesion())) throw new Error('La sesión venció: volvé a entrar.');
+  if (!(await haySesion())) throw new Error('Para cargar, aprobar o cambiar algo tenés que entrar con la contraseña.');
 }
 
 export async function entrar(_: EstadoAccion, fd: FormData): Promise<EstadoAccion> {
