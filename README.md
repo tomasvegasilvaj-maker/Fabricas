@@ -44,6 +44,7 @@ Cargás el comercio y su logo. La fábrica investiga el negocio, busca inspiraci
    | `WEBHOOK_SECRET` | Habilita `POST /api/webhook/pedido` | opcional |
    | `TOPE_USD_POR_PLACA` | Tope de IA por placa (por defecto 2.5) | opcional |
    | `SESSION_SECRET` | Firma de la sesión. Si falta, se arma con la clave de Supabase y `APP_PASSWORD` | opcional |
+   | `VISTA_PUBLICA` | `no` cierra el modo vista: sin contraseña no se ve nada (por defecto se puede mirar sin entrar) | opcional |
 
    No hay que inventar ninguna otra clave: la app se despierta a sí misma con una clave derivada de la de Supabase, y el latido del cron usa una que vive en Vault (paso 3).
 
@@ -109,7 +110,7 @@ tests/                   pruebas con vitest
 
 ## Seguridad
 
-- Un solo usuario: clave `APP_PASSWORD` y cookie firmada por 30 días. El proxy y cada página o acción verifican la sesión.
+- Un solo usuario: clave `APP_PASSWORD` y cookie firmada por 30 días. Sin sesión la app queda en **modo vista**: se ven las páginas y las imágenes (para mostrársela a otras IAs), pero cada acción del servidor pide la sesión antes de hacer nada, así que nadie puede cargar pedidos, aprobar ni gastar IA. `VISTA_PUBLICA=no` lo cierra.
 - La clave de servicio de Supabase solo se usa en el servidor; las tablas `fab_*` no tienen acceso público.
-- Los archivos son privados y se sirven por `/api/archivos` solo con sesión.
+- Los archivos son privados en Supabase y se sirven por `/api/archivos` (con sesión o en modo vista).
 - Los SVG que dibuja la IA se limpian con una lista blanca de elementos y atributos antes de guardarlos o mostrarlos.

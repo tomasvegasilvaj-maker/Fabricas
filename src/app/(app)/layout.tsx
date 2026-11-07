@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { Pestanas } from '@/componentes/Pestanas';
-import { requiereSesion } from '@/lib/auth';
+import { sesionOVista } from '@/lib/auth';
 import { faltaBase } from '@/lib/configuracion';
 import { contarPrevias } from '@/lib/consultas';
 import { configuracionFaltante } from '@/lib/env';
 import { salir } from '../acciones';
 
 export default async function LayoutApp({ children }: { children: React.ReactNode }) {
-  await requiereSesion();
+  const conSesion = await sesionOVista();
   const faltan = configuracionFaltante();
   const previas = faltaBase() ? 0 : await contarPrevias().catch(() => 0);
   return (
@@ -25,13 +25,30 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
             <div className="muted small">NFC + QR para comercios · La Calera</div>
           </div>
         </Link>
-        <form action={salir}>
-          <button type="submit" className="btn ghost sm">
-            Salir
-          </button>
-        </form>
+        {conSesion ? (
+          <form action={salir}>
+            <button type="submit" className="btn ghost sm">
+              Salir
+            </button>
+          </form>
+        ) : (
+          <Link href="/login" className="btn ghost sm">
+            Entrar
+          </Link>
+        )}
       </header>
       <Pestanas previas={previas} />
+      {!conSesion && (
+        <div className="banner">
+          <div>
+            <div className="t">Modo vista</div>
+            <div className="muted small">Estás mirando sin contraseña: se ve todo, pero para cargar, aprobar o cambiar algo hay que entrar.</div>
+          </div>
+          <Link className="btn ghost sm" href="/login">
+            Entrar
+          </Link>
+        </div>
+      )}
       {faltan.length > 0 && (
         <div className="banner warn">
           <div>
