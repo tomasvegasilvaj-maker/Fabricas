@@ -69,6 +69,14 @@ export default function NuevoPedido() {
               </select>
             </label>
             <label className="campo">
+              Quién la hace
+              <small>El equipo de Pedrito (Ideas, Diseño con Gemini, Estructura y Producción) o la línea clásica de bocetos SVG</small>
+              <select name="linea" defaultValue="equipo">
+                <option value="equipo">Equipo de Pedrito (nuevo)</option>
+                <option value="clasica">Línea clásica</option>
+              </select>
+            </label>
+            <label className="campo">
               Link de destino <small>Opcional: si no, se arma solo según el objetivo</small>
               <input type="url" name="destino_url" placeholder="https://..." maxLength={2000} />
             </label>

@@ -11,7 +11,7 @@ import { SinBase } from '@/componentes/SinBase';
 import { TarjetaPrevia } from '@/componentes/TarjetaPrevia';
 import { faltaBase } from '@/lib/configuracion';
 import { detallePedido } from '@/lib/consultas';
-import { ETAPAS, indiceEtapa, NOMBRE_ESTADO, NOMBRE_PASO, nombreEtapa, OBJETIVOS } from '@/lib/motor/flujo';
+import { etapasDe, indiceEtapa, NOMBRE_ESTADO, NOMBRE_PASO, nombreEtapa, OBJETIVOS } from '@/lib/motor/flujo';
 import type { TipoPaso } from '@/lib/motor/tipos';
 import type { ChequeoSvg } from '@/lib/placa/svg';
 
@@ -49,11 +49,16 @@ export default async function Pedido({ params }: { params: Promise<{ id: string 
   if (!d) notFound();
   const { pedido, comercio } = d;
 
-  const etapaActual = indiceEtapa(pedido.etapa);
+  const etapaActual = indiceEtapa(pedido.etapa, pedido.linea);
   const pendientes = d.previas.filter((p) => p.estado === 'pendiente');
-  const activacion = d.pasos.filter((p) => p.tipo === 'activacion' && p.estado === 'hecho').at(-1)?.salida as
-    | { n: number; codigo: string; lote: string; url_qr: string; destino: string; simulado: boolean }
-    | undefined;
+  type Activacion = { n: number; codigo: string; lote: string; url_qr: string; destino: string; simulado: boolean };
+  const pasoQr = d.pasos.filter((p) => (p.tipo === 'activacion' || p.tipo === 'produccion') && p.estado === 'hecho').at(-1);
+  // En la línea del equipo el QR lo activa Producción y lo deja dentro de su salida.
+  const salidaQr = pasoQr?.salida as (Activacion & { qr?: { n: number; codigo: string; lote: string; url: string } }) | undefined;
+  const activacion: Activacion | undefined =
+    pasoQr?.tipo === 'produccion' && salidaQr?.qr
+      ? { n: salidaQr.qr.n, codigo: salidaQr.qr.codigo, lote: salidaQr.qr.lote, url_qr: salidaQr.qr.url, destino: salidaQr.destino, simulado: salidaQr.simulado }
+      : salidaQr;
   const entregables = d.archivos.filter((a) => a.pedido_id === pedido.id && ENTREGABLES.includes(a.tipo));
   const inv = comercio.investigacion as { resumen?: string; fuentes?: { titulo: string; url: string }[]; estilo_visual?: string; destacados?: string[]; frases_clientes?: string[] } | null;
   const tandas = [...new Set(d.conceptos.map((c) => c.tanda))];
@@ -65,6 +70,7 @@ export default async function Pedido({ params }: { params: Promise<{ id: string 
       <aside className="panel">
         <div className="tag" style={{ color: 'var(--f-nfc)' }}>
           Placas NFC · pedido #{pedido.numero}
+          {pedido.linea === 'equipo' ? ' · equipo de Pedrito' : ''}
           {pedido.simulado ? ' · prueba' : ''}
         </div>
         <h2 style={{ marginTop: 4 }}>{comercio.nombre}</h2>
@@ -73,10 +79,10 @@ export default async function Pedido({ params }: { params: Promise<{ id: string 
           {comercio.ciudad ? ` · ${comercio.ciudad}` : ''}
         </div>
         <div style={{ marginTop: 12 }}>
-          <Segmentos etapa={pedido.etapa} />
+          <Segmentos etapa={pedido.etapa} linea={pedido.linea} />
         </div>
         <ol className="steps" style={{ marginTop: 12 }}>
-          {ETAPAS.map((e, i) => {
+          {etapasDe(pedido.linea).map((e, i) => {
             const clase = [i < etapaActual ? 'done' : '', i === etapaActual && pedido.etapa !== 'listo' ? 'now' : '', e.tuya ? 'human' : ''].join(' ');
             return (
               <li key={e.id} className={clase}>

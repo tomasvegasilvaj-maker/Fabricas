@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { faltaBase } from '@/lib/configuracion';
 import { configuracionFaltante } from '@/lib/env';
 import { chequearIA } from '@/lib/ia/claude';
+import { modeloImagen } from '@/lib/ia/gemini';
 import { archivosDeFuentes } from '@/lib/placa/fuentes';
 import { renderizar } from '@/lib/placa/render';
 import { db } from '@/lib/supabase';
@@ -37,8 +38,10 @@ export async function GET() {
   const ia = await chequearIA();
   const fuentes = archivosDeFuentes().length;
   const faltan = configuracionFaltante();
+  // La clave de Gemini solo hace falta para el equipo de Pedrito (Diseño): se informa sin bajar el «ok».
+  const equipo = { gemini: process.env.GEMINI_API_KEY ? 'configurada' : 'falta GEMINI_API_KEY', modelo_imagen: modeloImagen() };
   return NextResponse.json(
-    { ok: render.ok && fuentes > 0 && base === 'ok' && ia.ok && faltan.length === 0, faltan, base, ia, fuentes, render, version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local' },
+    { ok: render.ok && fuentes > 0 && base === 'ok' && ia.ok && faltan.length === 0, faltan, base, ia, equipo, fuentes, render, version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local' },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

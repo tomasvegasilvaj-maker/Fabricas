@@ -72,6 +72,67 @@ function marcasDeCorte(pagina: PDFPage, x: number, y: number, ancho: number, alt
   }
 }
 
+/** Acomodo de dos placas 10 × 15 en una A4 vertical, como lo hace FotoHoja: lado a lado, centradas, con separación. */
+export const A4_DOS_PLACAS = { margen: 4, separacion: 2, arriba: 12 } as const;
+
+export function posicionesDosPlacas() {
+  const { separacion, arriba } = A4_DOS_PLACAS;
+  const anchoBloque = 2 * PLACA.ancho + separacion;
+  const x0 = (210 - anchoBloque) / 2;
+  return [0, 1].map((i) => ({ x: x0 + i * (PLACA.ancho + separacion), y: arriba, w: PLACA.ancho, h: PLACA.alto }));
+}
+
+/**
+ * Hoja A4 con dos placas de 10 × 15 (sin sangrado) para imprimir al 100 %, con guías de corte en los
+ * márgenes y, abajo, los datos y los pasos de armado. `jpg` es la placa ya recortada a 100 × 150 mm.
+ */
+export async function pdfA4DosPlacas(jpg: Buffer, guia: GuiaArmado): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(textoWinAnsi(guia.titulo));
+  pdf.setCreator('Fábrica de placas');
+  const normal = await pdf.embedFont(StandardFonts.Helvetica);
+  const negrita = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const imagen = await pdf.embedJpg(jpg);
+  const alto = 297;
+  const pagina = pdf.addPage([mm(210), mm(alto)]);
+  const gris = rgb(0.45, 0.45, 0.45);
+  const posiciones = posicionesDosPlacas();
+  for (const p of posiciones) {
+    pagina.drawImage(imagen, { x: mm(p.x), y: mm(alto - p.y - p.h), width: mm(p.w), height: mm(p.h) });
+  }
+  // Guías de corte: líneas finas en los márgenes, a la altura y al ancho de cada borde.
+  const xs = [...new Set(posiciones.flatMap((p) => [p.x, p.x + p.w]))];
+  const ySup = posiciones[0].y;
+  const yInf = posiciones[0].y + posiciones[0].h;
+  for (const x of xs) {
+    pagina.drawLine({ start: { x: mm(x), y: mm(alto - ySup + 1.5) }, end: { x: mm(x), y: mm(alto - ySup + 7) }, thickness: 0.3, color: gris });
+    pagina.drawLine({ start: { x: mm(x), y: mm(alto - yInf - 1.5) }, end: { x: mm(x), y: mm(alto - yInf - 7) }, thickness: 0.3, color: gris });
+  }
+  const xIzq = posiciones[0].x;
+  const xDer = posiciones[1].x + posiciones[1].w;
+  for (const y of [ySup, yInf]) {
+    pagina.drawLine({ start: { x: mm(xIzq - 0.8), y: mm(alto - y) }, end: { x: mm(Math.max(xIzq - 4, 0.5)), y: mm(alto - y) }, thickness: 0.3, color: gris });
+    pagina.drawLine({ start: { x: mm(xDer + 0.8), y: mm(alto - y) }, end: { x: mm(Math.min(xDer + 4, 209.5)), y: mm(alto - y) }, thickness: 0.3, color: gris });
+  }
+
+  const izquierda = mm(14);
+  const anchoTexto = mm(210 - 28);
+  let cursor = mm(alto - yInf - 14);
+  const escribir = (texto: string, fuente: PDFFont, tamaño: number, color = rgb(0.1, 0.1, 0.1)) => {
+    for (const linea of envolver(texto, fuente, tamaño, anchoTexto)) {
+      pagina.drawText(linea, { x: izquierda, y: cursor, size: tamaño, font: fuente, color });
+      cursor -= tamaño * 1.35;
+    }
+  };
+  escribir(guia.titulo, negrita, 12);
+  if (guia.subtitulo) escribir(guia.subtitulo, normal, 9, rgb(0.35, 0.35, 0.35));
+  cursor -= mm(1.5);
+  for (const d of guia.datos) escribir(`${d.etiqueta}: ${d.valor}`, normal, 9);
+  cursor -= mm(1.5);
+  guia.pasos.forEach((p, i) => escribir(`${i + 1}. ${p}`, normal, 9));
+  return pdf.save();
+}
+
 /** Hoja A4 para imprimir en casa: la placa con marcas de corte y, abajo, la guía de armado. */
 export async function pdfA4(png: Buffer, guia: GuiaArmado): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();

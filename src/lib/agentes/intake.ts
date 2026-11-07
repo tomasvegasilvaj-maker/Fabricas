@@ -69,6 +69,14 @@ export const intake: Agente = async ({ comercio, pedido }) => {
   );
 
   const fondo = info.transparente ? 'fondo transparente' : info.fondo ? `fondo ${info.fondo}` : 'fondo irregular';
+  if (pedido.linea === 'equipo') {
+    return {
+      salida: { logo: info as unknown as Json },
+      resumen: `Logo listo: ${info.ancho}×${info.alto} px, ${fondo}, colores ${info.colores.join(' ') || '—'}.${aviso ? ` ${aviso}` : ''} Pasa al equipo de Pedrito.`,
+      siguientes: [{ tipo: 'pedrito', entrada: { revisar: 'inicio' } }],
+      pedidoEtapa: 'ideas',
+    };
+  }
   const fecha = (comercio.investigacion as { fecha?: string } | null)?.fecha;
   const vigente = fecha && Date.now() - new Date(fecha).getTime() < DIAS_INVESTIGACION_VIGENTE * 86_400_000;
   return {

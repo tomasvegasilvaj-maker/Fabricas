@@ -104,6 +104,18 @@ export async function preferencias() {
   return revisar(await db().from('fab_preferencias').select('*').order('activo', { ascending: false }).order('created_at', { ascending: false }), 'preferencias');
 }
 
+/** Reglas que aprendió cada agente del equipo de Pedrito (sin las de pedidos de prueba). */
+export async function reglasEquipo() {
+  return revisar(
+    await db().from('fab_reglas_agente').select('*').eq('prueba', false).order('agente').order('activo', { ascending: false }).order('created_at', { ascending: false }),
+    'reglas del equipo',
+  );
+}
+
+export async function promptsPorRubro() {
+  return revisar(await db().from('fab_prompts_rubro').select('*').order('rubro'), 'prompts por rubro');
+}
+
 export async function loteQr() {
   return revisar(await db().from('fab_qr_lote').select('*').order('lote').order('n'), 'lote');
 }

@@ -106,6 +106,7 @@ export async function nuevoPedido(_: EstadoAccion, fd: FormData): Promise<Estado
       ideas: texto(fd, 'ideas'),
       simulado,
       autoAprobar: fd.get('auto_aprobar') === 'on',
+      linea: texto(fd, 'linea'),
     });
     id = pedido.id;
   } catch (e) {
@@ -228,6 +229,21 @@ export async function guardarPreferencia(_: EstadoAccion, fd: FormData): Promise
     } else {
       return { error: 'Acción desconocida.' };
     }
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath('/ajustes');
+  return { ok: 'Guardado.' };
+}
+
+/** Prende o apaga una regla que aprendió un agente del equipo de Pedrito (por si aprendió algo que no querés). */
+export async function guardarReglaAgente(_: EstadoAccion, fd: FormData): Promise<EstadoAccion> {
+  try {
+    await exigirSesion();
+    const accion = texto(fd, 'accion');
+    if (accion !== 'activar' && accion !== 'desactivar') return { error: 'Acción desconocida.' };
+    const { error } = await db().from('fab_reglas_agente').update({ activo: accion === 'activar' }).eq('id', texto(fd, 'id'));
+    if (error) return { error: error.code === '23505' ? 'Ese agente ya tiene una regla prendida con el mismo texto.' : error.message };
   } catch (e) {
     return { error: mensaje(e) };
   }

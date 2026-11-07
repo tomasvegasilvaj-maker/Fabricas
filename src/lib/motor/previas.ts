@@ -116,6 +116,18 @@ export async function rehacerConceptos(previaId: string, op: { comentario?: stri
   return ok;
 }
 
+async function esEquipo(pedidoId: string) {
+  const { data } = await db().from('fab_pedidos').select('linea').eq('id', pedidoId).single();
+  return data?.linea === 'equipo';
+}
+
+/** Después de tu OK con el link: en la línea clásica activa el QR; en la del equipo lo hace Producción con todo lo demás. */
+function pasoConDestino(equipo: boolean, versionId: string, destino: string): { siguiente: Siguiente; etapa: Etapa } {
+  return equipo
+    ? { siguiente: { tipo: 'produccion', entrada: { version_id: versionId, destino } }, etapa: 'produccion' }
+    : { siguiente: { tipo: 'activacion', entrada: { version_id: versionId, destino } }, etapa: 'activacion' };
+}
+
 /** Aprobás la placa final: se activa el QR con el link y se arman los archivos. */
 export async function aprobarFinal(previaId: string, op: { destino: string }) {
   const previa = await leerPrevia(previaId, ['aprobar_final']);
@@ -123,7 +135,8 @@ export async function aprobarFinal(previaId: string, op: { destino: string }) {
   if (!destino) throw new Error('El link de destino no es válido (tiene que empezar con https://).');
   const versionId = String(datos(previa).version_id ?? '');
   if (!versionId) throw new Error('A la Previa le falta la versión a aprobar.');
-  const ok = await resolver(previa, { aprobada: true, destino }, [{ tipo: 'activacion', entrada: { version_id: versionId, destino } }], 'en_marcha', 'activacion');
+  const { siguiente, etapa } = pasoConDestino(await esEquipo(previa.pedido_id), versionId, destino);
+  const ok = await resolver(previa, { aprobada: true, destino }, [siguiente], 'en_marcha', etapa);
   if (ok) await registrarEvento(previa.pedido_id, `Aprobaste la placa. Destino: ${destino}`);
   return ok;
 }
@@ -135,7 +148,30 @@ export async function pedirCambios(previaId: string, op: { comentario: string; r
   if (!comentario) throw new Error('Escribí qué cambiar.');
   const versionId = String(datos(previa).version_id ?? '');
   await db().from('fab_pedidos').update({ ronda: 0 }).eq('id', previa.pedido_id);
-  const ok = await resolver(previa, { cambios: comentario }, [{ tipo: 'elaboracion', entrada: { version_id: versionId, comentario } }], 'en_marcha', 'elaboracion');
+  let ok: boolean;
+  if (await esEquipo(previa.pedido_id)) {
+    // Vuelve a Diseño con el mismo concepto y tu pedido; después pasa otra vez por Pedrito y Estructura.
+    const version = revisar(await db().from('fab_versiones').select('concepto_id').eq('id', versionId).single(), 'leer versión');
+    const { data: pasoPedrito } = await db()
+      .from('fab_pasos')
+      .select('salida')
+      .eq('pedido_id', previa.pedido_id)
+      .eq('tipo', 'pedrito')
+      .contains('salida', { decision: 'aprobar', concepto_id: version.concepto_id })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const indicaciones = (pasoPedrito?.salida as { indicaciones?: string } | null)?.indicaciones ?? '';
+    ok = await resolver(
+      previa,
+      { cambios: comentario },
+      [{ tipo: 'diseno', entrada: { concepto_id: version.concepto_id, indicaciones, comentario_tomi: comentario, ronda: 1 } }],
+      'en_marcha',
+      'diseno',
+    );
+  } else {
+    ok = await resolver(previa, { cambios: comentario }, [{ tipo: 'elaboracion', entrada: { version_id: versionId, comentario } }], 'en_marcha', 'elaboracion');
+  }
   if (ok && op.recordar) await guardarPreferencia(comentario, previa.pedido_id);
   if (ok) await registrarEvento(previa.pedido_id, `Pediste cambios: ${comentario}`);
   return ok;
@@ -209,7 +245,8 @@ export async function completarDestino(previaId: string, destino: string) {
   const url = urlValida(destino);
   if (!url) throw new Error('El link no es válido (tiene que empezar con https://).');
   const versionId = String(datos(previa).version_id ?? '');
-  const ok = await resolver(previa, { destino: url }, [{ tipo: 'activacion', entrada: { version_id: versionId, destino: url } }], 'en_marcha', 'activacion');
+  const { siguiente, etapa } = pasoConDestino(await esEquipo(previa.pedido_id), versionId, url);
+  const ok = await resolver(previa, { destino: url }, [siguiente], 'en_marcha', etapa);
   if (ok) await registrarEvento(previa.pedido_id, `Completaste el link de destino: ${url}`);
   return ok;
 }

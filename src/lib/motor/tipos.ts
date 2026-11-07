@@ -11,11 +11,33 @@ export const TIPOS_PASO = [
   'revision',
   'activacion',
   'imprenta',
+  // Línea «equipo»: Pedrito orquesta y da el visto bueno entre etapas.
+  'pedrito',
+  'ideas',
+  'diseno',
+  'estructura',
+  'produccion',
 ] as const;
 export type TipoPaso = (typeof TIPOS_PASO)[number];
 
+/** Los cuatro agentes del equipo de Pedrito (también son los dueños de las reglas aprendidas). */
+export const AGENTES_EQUIPO = ['ideas', 'diseno', 'estructura', 'produccion'] as const;
+export type AgenteEquipo = (typeof AGENTES_EQUIPO)[number];
+export type Linea = 'clasica' | 'equipo';
+
 /** Pasos que gastan IA: antes de correrlos se mira el tope de gasto del pedido. */
-export const PASOS_CON_IA: readonly TipoPaso[] = ['investigacion', 'inspiracion', 'conceptos', 'boceto', 'elaboracion', 'revision'];
+export const PASOS_CON_IA: readonly TipoPaso[] = [
+  'investigacion',
+  'inspiracion',
+  'conceptos',
+  'boceto',
+  'elaboracion',
+  'revision',
+  'pedrito',
+  'ideas',
+  'diseno',
+  'estructura',
+];
 
 export type TipoPrevia = 'elegir_concepto' | 'aprobar_final' | 'tope_gasto' | 'falta_dato' | 'fallo';
 export type EstadoPedido = 'en_marcha' | 'en_espera' | 'pausado' | 'listo' | 'fallido' | 'cancelado';
@@ -31,6 +53,10 @@ export type Etapa =
   | 'aprobacion'
   | 'activacion'
   | 'imprenta'
+  | 'ideas'
+  | 'diseno'
+  | 'estructura'
+  | 'produccion'
   | 'listo';
 
 export type Siguiente = { tipo: TipoPaso; entrada?: Json; max_intentos?: number };
