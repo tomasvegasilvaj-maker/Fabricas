@@ -40,6 +40,8 @@ export type PedidoRow = {
   gasto_usd: number;
   id: string;
   ideas: string | null;
+  /** «clasica» (bocetos SVG) o «equipo» (Pedrito con Ideas, Diseño, Estructura y Producción). */
+  linea: string;
   numero: number;
   objetivo: string;
   qr_codigo: string | null;
@@ -163,6 +165,27 @@ export type PreferenciaRow = {
   tipo: string;
 };
 
+export type ReglaAgenteRow = {
+  activo: boolean;
+  agente: string;
+  created_at: string;
+  id: string;
+  pedido_id: string | null;
+  prueba: boolean;
+  rubro: string | null;
+  texto: string;
+};
+
+export type PromptRubroRow = {
+  activo: boolean;
+  created_at: string;
+  id: string;
+  notas: string | null;
+  prompt: string;
+  rubro: string;
+  updated_at: string;
+};
+
 export type ConfigRow = {
   clave: string;
   updated_at: string;
@@ -189,7 +212,7 @@ export type Database = {
           Opcional<
             PedidoRow,
             | 'id' | 'created_at' | 'updated_at' | 'auto_aprobar' | 'concepto_id' | 'destino_url' | 'estado'
-            | 'etapa' | 'fabrica' | 'gasto_usd' | 'ideas' | 'qr_codigo' | 'ronda' | 'simulado'
+            | 'etapa' | 'fabrica' | 'gasto_usd' | 'ideas' | 'linea' | 'qr_codigo' | 'ronda' | 'simulado'
             | 'terminado_at' | 'tope_usd' | 'version_final_id'
           >,
           'numero'
@@ -232,6 +255,14 @@ export type Database = {
         PreferenciaRow,
         Opcional<PreferenciaRow, 'id' | 'created_at' | 'activo' | 'origen' | 'rubro' | 'tipo'>
       >;
+      fab_reglas_agente: Tabla<
+        ReglaAgenteRow,
+        Opcional<ReglaAgenteRow, 'id' | 'created_at' | 'activo' | 'pedido_id' | 'prueba' | 'rubro'>
+      >;
+      fab_prompts_rubro: Tabla<
+        PromptRubroRow,
+        Opcional<PromptRubroRow, 'id' | 'created_at' | 'updated_at' | 'activo' | 'notas'>
+      >;
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -273,6 +304,10 @@ export type Database = {
         Returns: boolean;
       };
       fab_sumar_costo: { Args: { p_paso: string; p_pedido: string; p_usd: number }; Returns: number };
+      fab_verificar_qr: {
+        Args: { p_codigo: string };
+        Returns: { codigo: string; estado: string; lote: string; n: number; pedido_id: string | null; url: string | null }[];
+      };
       fab_tomar_paso: { Args: { p_atasco_seg?: number }; Returns: PasoRow[] };
     };
     Enums: { [_ in never]: never };

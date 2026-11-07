@@ -33,6 +33,8 @@ const Esquema = z.object({
   logo_mime: texto(60),
   simulado: z.boolean().optional(),
   auto_aprobar: z.boolean().optional(),
+  /** «equipo» para el equipo de Pedrito; por defecto la línea clásica hasta probar la nueva de punta a punta. */
+  linea: z.enum(['clasica', 'equipo']).optional(),
 });
 
 /** Reconoce el formato por los primeros bytes, por si el servidor manda un tipo genérico. */
@@ -104,6 +106,7 @@ export async function POST(req: Request) {
       ideas: d.ideas,
       simulado: d.simulado,
       autoAprobar: d.auto_aprobar,
+      linea: d.linea,
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 422 });

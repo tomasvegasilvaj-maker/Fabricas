@@ -27,6 +27,24 @@ Cargás el comercio y su logo. La fábrica investiga el negocio, busca inspiraci
 - **QR:** no se generan. Se asignan del lote pre-impreso (`fab_qr_lote`, lote A4 #1 de 108 stickers de 16 mm) y se apuntan al destino en el QR dinámico de `qr-pasoapaso.vercel.app/q/CODIGO`. El NFC se graba con la misma URL. Los códigos de activación nunca pasan por la app.
 - **Placa:** 100 × 150 mm + 3 mm de sangrado. La IA dibuja un SVG; la app lo limpia y valida (zona segura de 4 mm, QR de 20 mm, círculo NFC, distancias entre elementos), mete el logo real y lo dibuja con resvg y las tipografías de `fuentes/`.
 
+## Equipo de Pedrito (línea nueva)
+
+Cada pedido elige su línea (`fab_pedidos.linea`). La **clásica** es la tabla de arriba y sigue intacta. La del **equipo** la corren cuatro agentes con un jefe:
+
+| Quién | Qué hace |
+|-------|----------|
+| **Pedrito** (jefe) | Decide el orden, le pasa a cada agente el resultado del anterior y da el visto bueno entre etapas. Si algo no está bien, devuelve el trabajo con una corrección y una regla de una línea. |
+| **Ideas** | Tres conceptos según el rubro, con el objeto protagonista del círculo NFC. Pedrito elige uno (hasta 2 rondas). |
+| **Diseño** | Una sola imagen por ronda con Gemini, usando el prompt que funcionó para el rubro (`fab_prompts_rubro`, «*» es la base). Encima va la plantilla, dibujada con código. Hasta 3 rondas. |
+| **Estructura** | Verifica la plantilla obligatoria: logo arriba al medio, NFC o ícono al centro, QR abajo con «¿Sin NFC? Escaneá el código QR» y pie con rubro y «La Calera». Lo mide en código y lo mira con visión. |
+| **Vos** | Previa: confirmás la placa y el link. |
+| **Producción** | Toma la imagen confirmada, activa el QR del lote, verifica en Supabase que ese QR sea del pedido y apunte al link, arma el PDF A4 con dos placas 10 × 15 y prueba que el link abra. |
+
+- **Reglas aprendidas:** cada corrección de Pedrito trae una regla de una línea. El agente corregido la guarda en `fab_reglas_agente` y relee todas sus reglas antes de cada trabajo. Se ven y se apagan en Ajustes. Las de pedidos de prueba quedan marcadas y no las leen los reales.
+- **Necesita** `GEMINI_API_KEY` en Vercel (y opcional `GEMINI_IMAGE_MODEL`, por defecto `gemini-3-pro-image-preview`). `/api/salud` muestra si está.
+- **Prueba sin IA:** con «Prueba sin IA» la línea del equipo corre con agentes simulados (Pedrito corrige una vez a Diseño para probar las reglas) y Producción hace todo salvo activar el QR.
+- El formulario propone el equipo por defecto; el webhook usa la clásica salvo que mande `"linea": "equipo"`.
+
 ## Puesta en marcha
 
 1. **Supabase.** Las migraciones de `supabase/migrations` ya están aplicadas en el proyecto `paso-a-paso`. Crean las tablas `fab_*`, el bucket privado `fabrica`, las funciones del motor, el lote de QR y el cron `fab-motor`.

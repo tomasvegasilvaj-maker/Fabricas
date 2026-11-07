@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ETAPAS, indiceEtapa, nombreEtapa } from '@/lib/motor/flujo';
+import { etapasDe, indiceEtapa, nombreEtapa } from '@/lib/motor/flujo';
 import { Edificio } from './Edificio';
 
-export type PedidoMapa = { id: string; numero: number; comercio: string; etapa: string; estado: string; gasto: number; tope: number };
+export type PedidoMapa = { id: string; numero: number; comercio: string; etapa: string; linea?: string; estado: string; gasto: number; tope: number };
 export type PreviaMapa = { id: string; titulo: string; tipo: string; pedidoId: string; comercio: string };
 
 type Fabrica = {
@@ -208,9 +208,9 @@ function PanelPlacas({ activos, listos, previas, fallosSemana, cerrar }: { activ
                 #{foco.numero} {foco.comercio}: {nombreEtapa(foco.etapa)}
               </span>
             </div>
-            <Segmentos etapa={foco.etapa} />
+            <Segmentos etapa={foco.etapa} linea={foco.linea} />
             <div className="muted small">
-              Paso {Math.min(indiceEtapa(foco.etapa) + 1, ETAPAS.length)} de {ETAPAS.length} · IA US$ {foco.gasto.toFixed(2)} de {foco.tope.toFixed(2)}
+              Paso {Math.min(indiceEtapa(foco.etapa, foco.linea) + 1, etapasDe(foco.linea).length)} de {etapasDe(foco.linea).length} · IA US$ {foco.gasto.toFixed(2)} de {foco.tope.toFixed(2)}
             </div>
             {fallosSemana > 0 && <div className="warnline">{fallosSemana} paso(s) fallaron esta semana: mirá las Previas.</div>}
             <Link className="btn sm ghost" href={`/pedidos/${foco.id}`} onClick={cerrar} style={{ justifySelf: 'start' }}>
@@ -274,12 +274,12 @@ function PanelPlacas({ activos, listos, previas, fallosSemana, cerrar }: { activ
   );
 }
 
-export function Segmentos({ etapa }: { etapa: string }) {
-  const actual = indiceEtapa(etapa);
+export function Segmentos({ etapa, linea }: { etapa: string; linea?: string | null }) {
+  const actual = indiceEtapa(etapa, linea);
   return (
     <div className="segs" aria-label={`Etapa ${nombreEtapa(etapa)}`}>
       <div className="bars">
-        {ETAPAS.map((e, i) => (
+        {etapasDe(linea).map((e, i) => (
           <i key={e.id} className={i < actual ? 'd' : i === actual ? (e.tuya ? 'h' : 'c') : ''} title={e.nombre} />
         ))}
       </div>

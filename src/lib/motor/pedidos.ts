@@ -39,6 +39,8 @@ export type NuevoPedido = {
   ideas?: string | null;
   simulado?: boolean;
   autoAprobar?: boolean;
+  /** «equipo» (Pedrito y sus cuatro agentes) o «clasica». Si no viene, la clásica. */
+  linea?: string | null;
 };
 
 function limpio(v: string | null | undefined, max = 300) {
@@ -100,6 +102,7 @@ export async function crearPedido(n: NuevoPedido): Promise<PedidoRow> {
         ideas: limpio(n.ideas, 3000),
         simulado: !!n.simulado,
         auto_aprobar: !!n.simulado && !!n.autoAprobar,
+        linea: n.linea === 'equipo' ? 'equipo' : 'clasica',
         tope_usd: env.topeUsd,
         estado: 'en_marcha',
         etapa: 'intake',
@@ -109,6 +112,9 @@ export async function crearPedido(n: NuevoPedido): Promise<PedidoRow> {
     'crear pedido',
   );
   revisar(await db().from('fab_pasos').insert({ pedido_id: pedido.id, tipo: 'intake' }).select('id'), 'encolar recepción');
-  await registrarEvento(pedido.id, `Pedido #${pedido.numero} creado para ${comercio.nombre}${pedido.simulado ? ' (prueba simulada, sin IA)' : ''}.`);
+  await registrarEvento(
+    pedido.id,
+    `Pedido #${pedido.numero} creado para ${comercio.nombre}${pedido.linea === 'equipo' ? ' (equipo de Pedrito)' : ''}${pedido.simulado ? ' (prueba simulada, sin IA)' : ''}.`,
+  );
   return pedido;
 }

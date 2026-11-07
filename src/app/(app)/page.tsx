@@ -14,6 +14,7 @@ export default async function Mapa() {
     numero: p.numero,
     comercio: p.comercio?.nombre ?? 'Comercio',
     etapa: p.etapa,
+    linea: p.linea,
     estado: p.estado,
     gasto: Number(p.gasto_usd),
     tope: Number(p.tope_usd),
