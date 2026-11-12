@@ -176,7 +176,7 @@ export const produccionEquipo: Agente = async (ctx) => {
 
   // 3. Placa a 300 dpi con el número del sticker, recortada a 10 × 15 y dos por hoja A4.
   const [imagenFondo, logo] = await Promise.all([bajarArchivo(imagenPath), logoDelComercio(comercio)]);
-  const placa = await componerPlaca(imagenFondo, { rubro: comercio.rubro, logo: { png: logo.png, info: logo.info }, colores, modo: 'imprenta', qrNumero: qr.n }, anchoParaDpi(300));
+  const placa = await componerPlaca(imagenFondo, { rubro: comercio.rubro, ciudad: comercio.ciudad, logo: { png: logo.png, info: logo.info }, colores, modo: 'imprenta', qrNumero: qr.n }, anchoParaDpi(300));
   const jpg = await sharp(await sinSangrado(placa.png, placa.ancho)).flatten({ background: '#FFFFFF' }).withMetadata({ density: 300 }).jpeg({ quality: 92, chromaSubsampling: '4:4:4' }).toBuffer();
   const url = urlQr(qr.codigo);
   const objetivo = OBJETIVOS[pedido.objetivo]?.nombre ?? pedido.objetivo;

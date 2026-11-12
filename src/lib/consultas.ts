@@ -90,8 +90,13 @@ export async function datosParaPrevia(previa: PreviaRow) {
     return { conceptos: conceptos ?? [], versiones: versiones ?? [] };
   }
   if ((previa.tipo === 'aprobar_final' || previa.tipo === 'falta_dato') && d.version_id) {
-    const { data: version } = await db().from('fab_versiones').select('*').eq('id', String(d.version_id)).maybeSingle();
-    return { version };
+    const [{ data: version }, { data: versiones }, { data: correcciones }, { data: revision }] = await Promise.all([
+      db().from('fab_versiones').select('*').eq('id', String(d.version_id)).maybeSingle(),
+      db().from('fab_versiones').select('id, numero, origen').eq('pedido_id', previa.pedido_id).eq('origen', 'diseno').order('numero', { ascending: false }),
+      db().from('fab_correcciones_pedido').select('*').eq('pedido_id', previa.pedido_id).order('orden'),
+      db().from('fab_partes_version').select('respuesta, alertas, version_numero').eq('pedido_id', previa.pedido_id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    return { version, versiones: versiones ?? [], correcciones: correcciones ?? [], revision };
   }
   if (previa.tipo === 'fallo' && d.paso_id) {
     const { data: paso } = await db().from('fab_pasos').select('*').eq('id', String(d.paso_id)).maybeSingle();

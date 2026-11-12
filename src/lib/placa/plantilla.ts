@@ -31,6 +31,8 @@ export const COLORES_POR_DEFECTO: ColoresPlantilla = { oscuro: '#141414', claro:
 
 export type DatosPlantilla = {
   rubro: string;
+  /** La ciudad de la ficha del comercio (si falta, La Calera). */
+  ciudad?: string | null;
   logo: { png: Buffer; info: InfoLogo };
   colores?: Partial<ColoresPlantilla>;
   /** «vista»: pega un QR de muestra. «imprenta»: deja el cuadrado blanco con marcas y el n.º del sticker. */
@@ -41,8 +43,13 @@ export type DatosPlantilla = {
 const xml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export function textoPie(rubro: string) {
-  return `${rubro.trim().toLocaleUpperCase('es-AR')} · ${CIUDAD_PIE.toLocaleUpperCase('es-AR')}`;
+/** Ciudad del pie: la de la ficha del comercio; si no está cargada, La Calera. */
+export function ciudadDelPie(ciudad?: string | null) {
+  return ciudad?.trim() || CIUDAD_PIE;
+}
+
+export function textoPie(rubro: string, ciudad?: string | null) {
+  return `${rubro.trim().toLocaleUpperCase('es-AR')} · ${ciudadDelPie(ciudad).toLocaleUpperCase('es-AR')}`;
 }
 
 /** Caja del logo con su proporción real, centrada arriba. */
@@ -108,7 +115,7 @@ export function svgPlantilla(d: DatosPlantilla): string {
   const aire = PLANTILLA.logo.aire;
   const fondoLogo = d.logo.info.transparente || !d.logo.info.fondo ? '#FFFFFF' : d.logo.info.fondo;
   const opacidadFondoLogo = d.logo.info.transparente || !d.logo.info.fondo ? 0.92 : 1;
-  const textoDelPie = textoPie(d.rubro);
+  const textoDelPie = textoPie(d.rubro, d.ciudad);
   const colorTextoPie = luminancia(colores.oscuro) > 0.45 ? '#141414' : '#FFFFFF';
 
   const partes: string[] = [];
@@ -169,7 +176,7 @@ function solapan(a: Caja, b: Caja) {
 }
 
 /** Chequeo geométrico de la plantilla (lo usa Estructura antes de mirar la imagen). */
-export function chequearPlantilla(rubro: string, logo: InfoLogo): ChequeoPlantilla {
+export function chequearPlantilla(rubro: string, logo: InfoLogo, ciudad?: string | null): ChequeoPlantilla {
   const fallas: string[] = [];
   const m = PLACA.margenSeguro;
   const caja = cajaLogo(logo.proporcion);
@@ -197,8 +204,8 @@ export function chequearPlantilla(rubro: string, logo: InfoLogo): ChequeoPlantil
     ['logo', 'tarjeta_qr'],
   ];
   for (const [a, b] of pares) if (solapan(zonas[a], zonas[b])) fallas.push(`${a} se pisa con ${b}.`);
-  const pie = textoPie(rubro);
-  if (!pie.includes(CIUDAD_PIE.toLocaleUpperCase('es-AR'))) fallas.push('Falta la ciudad en el pie.');
+  const pie = textoPie(rubro, ciudad);
+  if (!pie.includes(ciudadDelPie(ciudad).toLocaleUpperCase('es-AR'))) fallas.push('Falta la ciudad en el pie.');
   if (!rubro.trim()) fallas.push('Falta el rubro en el pie.');
   return { ok: fallas.length === 0, fallas, textos: { qr: TEXTO_QR_PLANTILLA, pie }, zonas };
 }

@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 import { imagen, llamarClaude, texto } from '../../ia/claude';
-import { CIUDAD_PIE, TEXTO_QR_PLANTILLA } from '../../motor/flujo';
+import { TEXTO_QR_PLANTILLA } from '../../motor/flujo';
 import type { Agente, ContextoPaso } from '../../motor/tipos';
 import { chequearPlantilla, textoPie } from '../../placa/plantilla';
 import { bajarArchivo } from '../../supabase';
@@ -38,8 +38,9 @@ Sos el agente Estructura del equipo de Pedrito. Verificás que la placa cumpla l
 1. Logo del comercio arriba al medio, entero y legible.
 2. El círculo NFC (anillo punteado) al centro, con un objeto o ícono adentro que se lea como el protagonista y la píldora «ACERCÁ TU CELULAR ACÁ» debajo.
 3. Abajo, la tarjeta blanca con el QR y el texto exacto «${TEXTO_QR_PLANTILLA}», legible.
-4. Pie con el rubro y la ciudad «${CIUDAD_PIE}».
+4. Pie con el rubro y la ciudad del comercio (te paso el texto exacto).
 5. La ilustración de fondo NO tiene textos, letras, números, logos, QR ni marcos propios (la IA de imágenes a veces los inventa).
+6. El aro punteado y las ondas del NFC los dibuja SOLO la plantilla: si la ilustración trae sus propios aros, círculos, ondas o marcos alrededor del protagonista, es una falla de la imagen.
 
 Te paso la placa armada y la imagen de fondo sola. Cada falla en una oración concreta que Diseño pueda corregir en la imagen («el objeto central quedó corrido a la izquierda», «aparecen letras en la parte de arriba»). Si hay fallas, en "regla_sugerida" proponé UNA regla general de una línea para que Diseño no lo repita; si no hay fallas, null.
 
@@ -62,10 +63,10 @@ export function crearEstructura(mirar: Mirador): Agente {
     const chequeoVersion = (version.chequeo ?? {}) as { imagen_path?: string; imagen_mime?: string };
     if (!version.preview_path || !chequeoVersion.imagen_path) throw new Error('La versión no tiene la imagen de Diseño o su vista con la plantilla.');
     const { info } = await logoDelComercio(comercio);
-    const plantilla = chequearPlantilla(comercio.rubro, info);
+    const plantilla = chequearPlantilla(comercio.rubro, info, comercio.ciudad);
 
     const [vista, imagenFondo] = await Promise.all([bajarArchivo(version.preview_path), bajarArchivo(chequeoVersion.imagen_path)]);
-    const pie = textoPie(comercio.rubro);
+    const pie = textoPie(comercio.rubro, comercio.ciudad);
     const mirada = await mirar(ctx, { reglas, vista, imagen: imagenFondo, imagenMime: chequeoVersion.imagen_mime ?? 'image/png', pie, correccion: textoCorreccion(correccion) });
 
     const fallasImagen = mirada

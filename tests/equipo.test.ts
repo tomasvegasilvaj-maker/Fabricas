@@ -208,7 +208,10 @@ describe('prompt de Diseño', () => {
       rubro: 'pizzería',
       idea: IDEA,
       indicaciones: 'Keep the pizza big.',
-      comentarioTomi: 'más queso',
+      correccionesTomi: [
+        { orden: 1, texto: 'más queso' },
+        { orden: 2, texto: 'fondo más claro' },
+      ],
       correccion: { texto: 'The pizza was off-center.', regla: 'Centrá siempre el objeto.' },
       reglas: ['Centrá siempre el objeto.'],
     });
@@ -216,7 +219,10 @@ describe('prompt de Diseño', () => {
     expect(prompt).toContain('#D9572B (pizza)');
     expect(prompt).toContain('{desconocido}');
     expect(prompt).toContain(INSTRUCCIONES_PLANTILLA);
-    expect(prompt).toContain('Change requested by the client (top priority): más queso');
+    expect(prompt).toContain('1. más queso\n2. fondo más claro');
+    expect(prompt).toContain('ALL of them still apply');
+    expect(prompt).toContain('Do NOT draw rings');
+    expect(prompt).not.toContain('Edit the attached image');
     expect(prompt).toContain('Fix from the previous round: The pizza was off-center.');
     expect(prompt).toContain('- Centrá siempre el objeto.');
     expect(completarPrompt('{a}-{b}', { a: '1' })).toBe('1-{b}');

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { accionPedido } from '@/app/acciones';
+import { accionPedido, guardarFichaComercio } from '@/app/acciones';
 import { BotonEnviar } from '@/componentes/BotonEnviar';
 import { FormAccion } from '@/componentes/FormAccion';
 import { ImagenArchivo, urlArchivo } from '@/componentes/ImagenArchivo';
@@ -114,6 +114,36 @@ export default async function Pedido({ params }: { params: Promise<{ id: string 
             US$ {Number(pedido.gasto_usd).toFixed(2)} <span className="muted">de {Number(pedido.tope_usd).toFixed(2)} tope</span>
           </dd>
         </dl>
+        <details style={{ marginTop: 14 }}>
+          <summary>Datos del comercio</summary>
+          <p className="muted small" style={{ marginTop: 4 }}>
+            El logo, el nombre, el rubro y la ciudad se corrigen acá, no en el prompt: la plantilla los dibuja encima de la imagen y no gasta otra imagen.
+          </p>
+          <FormAccion accion={guardarFichaComercio} className="grid">
+            <input type="hidden" name="pedido_id" value={pedido.id} />
+            <label className="campo">
+              Nombre
+              <input name="nombre" defaultValue={comercio.nombre} maxLength={120} />
+            </label>
+            <label className="campo">
+              Rubro <small>Sale en el pie de la placa.</small>
+              <input name="rubro" defaultValue={comercio.rubro} maxLength={120} />
+            </label>
+            <label className="campo">
+              Ciudad <small>Sale en el pie (si queda vacía, La Calera).</small>
+              <input name="ciudad" defaultValue={comercio.ciudad ?? ''} maxLength={120} />
+            </label>
+            <label className="campo">
+              Logo nuevo <small>Opcional.</small>
+              <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/avif" />
+            </label>
+            <div className="acts">
+              <BotonEnviar clase="btn sm" pendiente="Guardando…">
+                Guardar datos del comercio
+              </BotonEnviar>
+            </div>
+          </FormAccion>
+        </details>
         <div className="acts" style={{ marginTop: 14 }}>
           {(pedido.estado === 'en_marcha' || pedido.estado === 'en_espera') && <AccionPedido pedidoId={pedido.id} accion="pausar" texto="Pausar" />}
           {pedido.estado === 'pausado' && <AccionPedido pedidoId={pedido.id} accion="reanudar" texto="Reanudar" clase="btn sm" />}

@@ -192,6 +192,39 @@ export type ParteUltimoRow = {
   updated_at: string;
 };
 
+export type CorreccionPedidoRow = {
+  id: string;
+  pedido_id: string;
+  orden: number;
+  texto: string;
+  version_id: string | null;
+  base_version_id: string | null;
+  created_at: string;
+};
+
+export type ParteVersionRow = {
+  id: string;
+  pedido_id: string;
+  version_id: string;
+  pedido_numero: number;
+  version_numero: number;
+  trabajador: string;
+  prompt: string;
+  costo_usd: number;
+  gasto_pedido_usd: number;
+  correcciones_usadas: string[];
+  base_version_id: string | null;
+  imagen_path: string | null;
+  vista_path: string | null;
+  enviado_at: string | null;
+  envio_error: string | null;
+  respuesta: 'pendiente' | 'ok' | 'alerta' | 'sin_respuesta' | 'no_enviado';
+  alertas: Json;
+  respondido_at: string | null;
+  resuelta: boolean;
+  created_at: string;
+};
+
 export type PromptRubroRow = {
   activo: boolean;
   created_at: string;
@@ -276,6 +309,15 @@ export type Database = {
         Opcional<ReglaAgenteRow, 'id' | 'created_at' | 'activo' | 'pedido_id' | 'prueba' | 'rubro' | 'origen' | 'motivo' | 'reemplaza_a'>
       >;
       fab_parte_ultimo: Tabla<ParteUltimoRow, Partial<ParteUltimoRow>>;
+      fab_correcciones_pedido: Tabla<CorreccionPedidoRow, Opcional<CorreccionPedidoRow, 'id' | 'created_at' | 'version_id' | 'base_version_id'>>;
+      fab_partes_version: Tabla<
+        ParteVersionRow,
+        Opcional<
+          ParteVersionRow,
+          | 'id' | 'created_at' | 'costo_usd' | 'gasto_pedido_usd' | 'correcciones_usadas' | 'base_version_id' | 'imagen_path' | 'vista_path'
+          | 'enviado_at' | 'envio_error' | 'respuesta' | 'alertas' | 'respondido_at' | 'resuelta'
+        >
+      >;
       fab_prompts_rubro: Tabla<
         PromptRubroRow,
         Opcional<PromptRubroRow, 'id' | 'created_at' | 'updated_at' | 'activo' | 'notas'>
@@ -326,6 +368,7 @@ export type Database = {
         Returns: { codigo: string; estado: string; lote: string; n: number; pedido_id: string | null; url: string | null }[];
       };
       fab_tomar_paso: { Args: { p_atasco_seg?: number }; Returns: PasoRow[] };
+      fab_esperar_paso: { Args: { p_paso: string; p_intento: number; p_segundos: number; p_nota: string }; Returns: boolean };
       fab_guardar_correcciones: {
         Args: { p_pedido: string | null; p_correcciones: Json };
         Returns: { id: string; agente: string; texto: string; reemplaza_a: string | null; ya_existia: boolean }[];
