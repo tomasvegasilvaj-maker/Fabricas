@@ -6,7 +6,7 @@ import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { ErrorPaso } from '@/lib/ia/claude';
-import { costoImagenUsd, leerRespuestaGemini } from '@/lib/ia/gemini';
+import { costoImagenUsd, leerRespuestaGateway, leerRespuestaGemini, modeloImagen, modeloParaGateway, proveedorImagen } from '@/lib/ia/gemini';
 import { renderizar } from '@/lib/placa/render';
 import { procesarLogo } from '@/lib/placa/logo';
 import { pdfA4DosPlacas, posicionesDosPlacas } from '@/lib/placa/pdf';
@@ -148,6 +148,56 @@ describe('Gemini', () => {
 
   it('cobra más el modelo pro', () => {
     expect(costoImagenUsd('gemini-3-pro-image-preview')).toBeGreaterThan(costoImagenUsd('gemini-2.5-flash-image'));
+  });
+});
+
+describe('Imágenes por Vercel AI Gateway', () => {
+  const atrapar = (f: () => unknown) => {
+    try {
+      f();
+    } catch (e) {
+      return e as ErrorPaso;
+    }
+    throw new Error('no falló');
+  };
+
+  it('saca la imagen del data URI', () => {
+    const png = Buffer.from('imagen');
+    const r = leerRespuestaGateway(200, { choices: [{ message: { content: 'listo', images: [{ type: 'image_url', image_url: { url: `data:image/png;base64,${png.toString('base64')}` } }] } }] }, 'google/gemini-3-pro-image');
+    expect(r.datos.equals(png)).toBe(true);
+    expect(r.mime).toBe('image/png');
+    expect(r.texto).toBe('listo');
+  });
+
+  it('avisa sin crédito, clave mala y modelo inexistente sin reintentar', () => {
+    const sinCredito = atrapar(() => leerRespuestaGateway(402, { error: { message: 'Insufficient funds' } }, 'm'));
+    expect(sinCredito.reintentable).toBe(false);
+    expect(sinCredito.message).toContain('crédito');
+    expect(atrapar(() => leerRespuestaGateway(401, { error: { message: 'Invalid API key' } }, 'm')).message).toContain('AI_GATEWAY_API_KEY');
+    expect(atrapar(() => leerRespuestaGateway(404, {}, 'google/nada')).message).toContain('GEMINI_IMAGE_MODEL');
+    expect(atrapar(() => leerRespuestaGateway(429, {}, 'm')).reintentable).toBe(true);
+    expect(atrapar(() => leerRespuestaGateway(200, { choices: [{ message: { content: 'no puedo' }, finish_reason: 'content_filter' }] }, 'm')).reintentable).toBe(false);
+  });
+
+  it('elige el camino por la clave y traduce el nombre del modelo', () => {
+    const antes = { ...process.env };
+    try {
+      delete process.env.AI_GATEWAY_API_KEY;
+      delete process.env.GEMINI_API_KEY;
+      delete process.env.GEMINI_IMAGE_MODEL;
+      expect(proveedorImagen()).toBeNull();
+      process.env.GEMINI_API_KEY = 'x';
+      expect(proveedorImagen()).toBe('google');
+      expect(modeloImagen()).toBe('gemini-3-pro-image-preview');
+      process.env.AI_GATEWAY_API_KEY = 'y';
+      expect(proveedorImagen()).toBe('gateway');
+      expect(modeloImagen()).toBe('google/gemini-3-pro-image');
+      process.env.GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image';
+      expect(modeloImagen()).toBe('google/gemini-2.5-flash-image');
+      expect(modeloParaGateway('google/gemini-3.1-flash-image')).toBe('google/gemini-3.1-flash-image');
+    } finally {
+      process.env = antes;
+    }
   });
 });
 
