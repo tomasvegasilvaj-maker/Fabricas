@@ -45,6 +45,19 @@ Cada pedido elige su línea (`fab_pedidos.linea`). La **clásica** es la tabla d
 - **Prueba sin IA:** con «Prueba sin IA» la línea del equipo corre con agentes simulados (Pedrito corrige una vez a Diseño para probar las reglas) y Producción hace todo salvo activar el QR.
 - El formulario propone el equipo por defecto; el webhook usa la clásica salvo que mande `"linea": "equipo"`.
 
+## Parte a Pedrito y correcciones de vuelta
+
+Pedrito (bot de Grok Bot) es el único nexo con los otros bots. La app solo le habla a él.
+
+**Salida: parte automático.** Cuando corre un paso del motor (placa nueva, cambio de estado, fallo de un agente), cuando cancelás o pausás un pedido, y en dos chequeos de respaldo (Supabase `fab-parte` cada 30 min y Vercel Cron una vez por día), la app arma el estado real (Supabase, solo pedidos reales) y lo compara con el último parte (`fab_parte_ultimo`). Si no cambió nada, no manda. Si cambió o hay un error nuevo, hace `POST` JSON a `PARTE_WEBHOOK_URL` con `Authorization: Bearer $PARTE_WEBHOOK_SECRET`: tres líneas de resumen, métricas contra el objetivo (20 placas, 10 negocios, 31/12/2026), estado de Gemini/A4, errores por agente y capturas (URLs firmadas por 7 días del bucket `fabrica`, carpeta `partes/`).
+
+- Placa hecha = pedido real en estado `listo`. Negocio activo = comercio con algún pedido real que no esté cancelado ni fallido.
+- Gemini/A4 no genera imágenes: consulta gratis si la clave (AI_GATEWAY_API_KEY o GEMINI_API_KEY) anda, arma un A4 de prueba con pdf-lib y mira fallos reales de las últimas 24 h.
+- Las capturas son pantallas dibujadas con los datos reales (Vercel no trae navegador); la de generación de placa es la última vista real guardada.
+- Ajustes → «Mandar parte de prueba» manda uno ya (marcado `"prueba": true`), sin gastar Gemini.
+
+**Entrada: `POST /api/parte/correcciones`** con `Authorization: Bearer $PARTE_CORRECCIONES_SECRET`. Valida el JSON (solo reglas de texto de una línea, hasta 240 caracteres, agentes ideas/diseno/estructura/produccion/pedrito) y lo guarda todo o nada en `fab_reglas_agente` (`origen = 'pedrito'`, `motivo`, `reemplaza_a`; la regla reemplazada queda apagada). La línea del equipo relee esas reglas antes de cada trabajo; las de `pedrito` las lee el propio Pedrito al revisar.
+
 ## Puesta en marcha
 
 1. **Supabase.** Las migraciones de `supabase/migrations` ya están aplicadas en el proyecto `paso-a-paso`. Crean las tablas `fab_*`, el bucket privado `fabrica`, las funciones del motor, el lote de QR y el cron `fab-motor`.

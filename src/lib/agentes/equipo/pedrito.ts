@@ -204,7 +204,7 @@ const EsquemaCorreccion = {
 const EsquemaIdeasPedrito = z.object({ decision: z.enum(['aprobar', 'corregir']), elegido: z.number(), indicaciones_para_diseno: z.string(), ...EsquemaCorreccion });
 const EsquemaDisenoPedrito = z.object({ decision: z.enum(['aprobar', 'corregir']), observaciones: z.array(z.string()), ...EsquemaCorreccion });
 
-async function reglasActuales(agente: AgenteEquipo) {
+async function reglasActuales(agente: AgenteEquipo | 'pedrito') {
   const { data } = await db().from('fab_reglas_agente').select('texto').eq('agente', agente).eq('activo', true).eq('prueba', false);
   return (data ?? []).map((r) => `- ${r.texto}`).join('\n') || '(todavía ninguna)';
 }
@@ -225,6 +225,9 @@ Si aprobás, dejá "correccion" y "regla" vacías.
 
 Reglas que ${agente === 'ideas' ? 'Ideas' : 'Diseño'} ya aprendió:
 ${await reglasActuales(agente)}
+
+Tus propias reglas como jefe (las mandaste vos por el parte de la fábrica; cumplilas al revisar):
+${await reglasActuales('pedrito')}
 
 ${await textoPreferencias(ctx.comercio.rubro)}`;
 }

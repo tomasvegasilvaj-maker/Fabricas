@@ -119,3 +119,9 @@ export async function promptsPorRubro() {
 export async function loteQr() {
   return revisar(await db().from('fab_qr_lote').select('*').order('lote').order('n'), 'lote');
 }
+
+/** El último parte que se le mandó a Pedrito (o el último intento fallido). */
+export async function parteUltimo() {
+  const { data } = await db().from('fab_parte_ultimo').select('*').eq('id', 1).maybeSingle();
+  return data;
+}

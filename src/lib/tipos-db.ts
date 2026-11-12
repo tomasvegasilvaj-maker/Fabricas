@@ -174,6 +174,22 @@ export type ReglaAgenteRow = {
   prueba: boolean;
   rubro: string | null;
   texto: string;
+  /** 'linea' = la guardó un agente en un pedido; 'pedrito' = llegó por /api/parte/correcciones. */
+  origen: string;
+  motivo: string | null;
+  /** La regla vieja que esta reemplazó (la vieja queda con activo = false). */
+  reemplaza_a: string | null;
+};
+
+export type ParteUltimoRow = {
+  id: number;
+  firma: string | null;
+  parte: Json | null;
+  motivo: string | null;
+  enviado_at: string | null;
+  intento_at: string | null;
+  error: string | null;
+  updated_at: string;
 };
 
 export type PromptRubroRow = {
@@ -257,8 +273,9 @@ export type Database = {
       >;
       fab_reglas_agente: Tabla<
         ReglaAgenteRow,
-        Opcional<ReglaAgenteRow, 'id' | 'created_at' | 'activo' | 'pedido_id' | 'prueba' | 'rubro'>
+        Opcional<ReglaAgenteRow, 'id' | 'created_at' | 'activo' | 'pedido_id' | 'prueba' | 'rubro' | 'origen' | 'motivo' | 'reemplaza_a'>
       >;
+      fab_parte_ultimo: Tabla<ParteUltimoRow, Partial<ParteUltimoRow>>;
       fab_prompts_rubro: Tabla<
         PromptRubroRow,
         Opcional<PromptRubroRow, 'id' | 'created_at' | 'updated_at' | 'activo' | 'notas'>
@@ -309,6 +326,11 @@ export type Database = {
         Returns: { codigo: string; estado: string; lote: string; n: number; pedido_id: string | null; url: string | null }[];
       };
       fab_tomar_paso: { Args: { p_atasco_seg?: number }; Returns: PasoRow[] };
+      fab_guardar_correcciones: {
+        Args: { p_pedido: string | null; p_correcciones: Json };
+        Returns: { id: string; agente: string; texto: string; reemplaza_a: string | null; ya_existia: boolean }[];
+      };
+      fab_parte_reclamar: { Args: { p_firma: string; p_forzar?: boolean }; Returns: { reclamado: boolean; firma_anterior: string | null }[] };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
