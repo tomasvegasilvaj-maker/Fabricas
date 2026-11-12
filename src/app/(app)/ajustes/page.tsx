@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import { guardarPreferencia, guardarReglaAgente } from '@/app/acciones';
+import { guardarPreferencia, guardarReglaAgente, mandarParteDePrueba } from '@/app/acciones';
 import { BotonEnviar } from '@/componentes/BotonEnviar';
 import { FormAccion } from '@/componentes/FormAccion';
 import { SinBase } from '@/componentes/SinBase';
 import { faltaBase } from '@/lib/configuracion';
-import { loteQr, preferencias, promptsPorRubro, reglasEquipo } from '@/lib/consultas';
+import { loteQr, parteUltimo, preferencias, promptsPorRubro, reglasEquipo } from '@/lib/consultas';
 import { env } from '@/lib/env';
 import { estadoLatido } from '@/lib/motor/secreto';
 
@@ -21,10 +21,14 @@ const VARIABLES: { nombre: string; para: string; obligatoria: boolean }[] = [
   { nombre: 'GOOGLE_PLACES_API_KEY', para: 'Datos y fotos de Google Maps (sin esto investiga solo en la web)', obligatoria: false },
   { nombre: 'WEBHOOK_SECRET', para: 'Cargar pedidos desde n8n, Make u otro sistema', obligatoria: false },
   { nombre: 'APP_URL', para: 'URL pública de la app (si falta, usa la de Vercel)', obligatoria: false },
+  { nombre: 'PARTE_WEBHOOK_URL', para: 'Webhook de la rutina «Parte automático Fábrica» de Pedrito', obligatoria: false },
+  { nombre: 'PARTE_WEBHOOK_SECRET', para: 'Secreto con el que la app firma el parte (Authorization: Bearer)', obligatoria: false },
+  { nombre: 'PARTE_CORRECCIONES_SECRET', para: 'Secreto que Pedrito manda a /api/parte/correcciones', obligatoria: false },
+  { nombre: 'CRON_SECRET', para: 'Chequeo diario de respaldo del Vercel Cron (sin esto queda el de Supabase cada 30 min)', obligatoria: false },
 ];
 
 const TIPOS: Record<string, string> = { regla: 'Regla', gusto: 'Me gusta', evitar: 'Evitar' };
-const AGENTES: Record<string, string> = { ideas: 'Ideas', diseno: 'Diseño', estructura: 'Estructura', produccion: 'Producción' };
+const AGENTES: Record<string, string> = { ideas: 'Ideas', diseno: 'Diseño', estructura: 'Estructura', produccion: 'Producción', pedrito: 'Pedrito' };
 
 function fecha(iso: string | null) {
   if (!iso) return '—';
@@ -33,9 +37,17 @@ function fecha(iso: string | null) {
 
 export default async function Ajustes() {
   const conBase = !faltaBase();
-  const [prefs, lote, latido, reglas, prompts] = conBase
-    ? await Promise.all([preferencias(), loteQr(), estadoLatido().catch(() => null), reglasEquipo().catch(() => []), promptsPorRubro().catch(() => [])])
-    : [[], [], null, [], []];
+  const [prefs, lote, latido, reglas, prompts, parte] = conBase
+    ? await Promise.all([
+        preferencias(),
+        loteQr(),
+        estadoLatido().catch(() => null),
+        reglasEquipo().catch(() => []),
+        promptsPorRubro().catch(() => []),
+        parteUltimo().catch(() => null),
+      ])
+    : [[], [], null, [], [], null];
+  const resumenParte = Array.isArray((parte?.parte as { resumen?: unknown } | null)?.resumen) ? ((parte!.parte as { resumen: string[] }).resumen) : [];
   const conteo = lote.reduce<Record<string, number>>((acc, q) => ({ ...acc, [q.estado]: (acc[q.estado] ?? 0) + 1 }), {});
   const proximo = lote.find((q) => q.estado === 'libre');
 
@@ -155,9 +167,37 @@ export default async function Ajustes() {
           </div>
 
           <div className="panel">
+            <h2>Parte a Pedrito</h2>
+            <p className="muted small" style={{ marginTop: 4 }}>
+              La app le manda un parte (tres líneas y capturas) a la rutina «Parte automático Fábrica» solo cuando cambia algo o aparece un error. Pedrito devuelve las
+              correcciones a <span className="mono">{env.appUrl}/api/parte/correcciones</span> y quedan en la tabla de reglas de abajo.
+            </p>
+            <div className="small" style={{ marginTop: 10 }}>
+              <div>
+                Último parte: <b>{parte?.enviado_at ? `${fecha(parte.enviado_at)} (${parte.motivo === 'error' ? 'error' : 'cambio de estado'})` : 'todavía ninguno'}</b>
+              </div>
+              {resumenParte.map((l, i) => (
+                <div key={i} className="muted">
+                  {l}
+                </div>
+              ))}
+              {parte?.error && (
+                <p className="alerta" style={{ marginTop: 8 }}>
+                  Último intento falló: {parte.error}
+                </p>
+              )}
+            </div>
+            <FormAccion accion={mandarParteDePrueba} className="acts">
+              <BotonEnviar clase="btn ghost sm" pendiente="Mandando…">
+                Mandar parte de prueba
+              </BotonEnviar>
+            </FormAccion>
+          </div>
+
+          <div className="panel">
             <h2>Equipo de Pedrito</h2>
             <p className="muted small" style={{ marginTop: 4 }}>
-              Reglas de una línea que cada agente guardó cuando Pedrito le corrigió algo. Las relee antes de cada trabajo. Si alguna no te sirve, apagala.
+              Reglas de una línea que cada agente guardó cuando Pedrito le corrigió algo, y las que Pedrito mandó por el parte (origen «parte»). Las relee antes de cada trabajo. Si alguna no te sirve, apagala.
             </p>
             <div className="overflow" style={{ marginTop: 12 }}>
               <table>
@@ -166,6 +206,7 @@ export default async function Ajustes() {
                     <th>Agente</th>
                     <th>Regla</th>
                     <th>Rubro</th>
+                    <th>Origen</th>
                     <th>Desde</th>
                     <th />
                   </tr>
@@ -173,7 +214,7 @@ export default async function Ajustes() {
                 <tbody>
                   {reglas.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="muted small">
+                      <td colSpan={6} className="muted small">
                         Todavía no aprendieron ninguna.
                       </td>
                     </tr>
@@ -181,8 +222,13 @@ export default async function Ajustes() {
                   {reglas.map((r) => (
                     <tr key={r.id} style={{ opacity: r.activo ? 1 : 0.5 }}>
                       <td className="small">{AGENTES[r.agente] ?? r.agente}</td>
-                      <td className="small">{r.texto}</td>
+                      <td className="small">
+                        {r.texto}
+                        {r.motivo && <div className="muted">Motivo: {r.motivo}</div>}
+                        {r.reemplaza_a && <div className="muted">Reemplaza a otra regla (apagada).</div>}
+                      </td>
                       <td className="small">{r.rubro ?? 'todos'}</td>
+                      <td className="small">{r.origen === 'pedrito' ? 'parte' : 'línea'}</td>
                       <td className="small">{fecha(r.created_at)}</td>
                       <td>
                         <FormAccion accion={guardarReglaAgente}>

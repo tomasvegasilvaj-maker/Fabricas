@@ -20,6 +20,6 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Todo pasa por acá menos el login, las rutas con su propio secreto (motor, webhook), la salud y los estáticos.
-  matcher: ['/((?!login|api/motor|api/webhook|api/salud|_next/static|_next/image|favicon.ico|icon.svg).*)'],
+  // Todo pasa por acá menos el login, las rutas con su propio secreto (motor, webhook, parte), la salud y los estáticos.
+  matcher: ['/((?!login|api/motor|api/webhook|api/salud|api/parte|_next/static|_next/image|favicon.ico|icon.svg).*)'],
 };

@@ -7,6 +7,7 @@ import { after } from 'next/server';
 import { haySesion } from '@/lib/auth';
 import { correrMotor } from '@/lib/motor/motor';
 import { crearPedido, type ArchivoSubido } from '@/lib/motor/pedidos';
+import { parteSiCambio, revisarYMandarParte } from '@/lib/parte/parte';
 import {
   aprobarFinal,
   cancelarPedido,
@@ -46,7 +47,8 @@ function mensaje(e: unknown) {
 function despertarMotor() {
   after(async () => {
     try {
-      await correrMotor();
+      // Si el motor no corrió nada (por ejemplo, cancelaste o pausaste), igual se mira si cambió el estado para el parte.
+      if ((await correrMotor()) === 0) await parteSiCambio('accion');
     } catch (e) {
       console.error('Motor:', e);
     }
@@ -254,4 +256,17 @@ export async function guardarReglaAgente(_: EstadoAccion, fd: FormData): Promise
   }
   revalidatePath('/ajustes');
   return { ok: 'Guardado.' };
+}
+
+/** Manda ya un parte de prueba a Pedrito (aunque no haya cambios). No genera imágenes con Gemini. */
+export async function mandarParteDePrueba(_: EstadoAccion): Promise<EstadoAccion> {
+  try {
+    await exigirSesion();
+    const r = await revisarYMandarParte({ forzar: true, origen: 'prueba' });
+    revalidatePath('/ajustes');
+    if (r.enviado) return { ok: `Parte de prueba enviado (${r.capturas} captura${r.capturas === 1 ? '' : 's'}).` };
+    return { error: r.detalle };
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
 }

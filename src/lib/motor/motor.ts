@@ -7,6 +7,7 @@ import { NOMBRE_PASO } from './flujo';
 import { patearMotor } from './patear';
 import { anotarUrlDelLatido } from './secreto';
 import { autoResolverPrevias } from './previas';
+import { parteSiCambio } from '../parte/parte';
 import { gastaIA, TIPOS_PASO, type ContextoPaso, type TipoPaso } from './tipos';
 
 /** Después de un paso corto se sigue en la misma vuelta solo si queda tiempo para uno de IA. */
@@ -43,6 +44,8 @@ export async function correrMotor(inicio = Date.now()): Promise<number> {
   }
   const pendientes = await contarPasosDisponibles();
   if (pendientes > 0) await patearMotor(Math.min(pendientes, 3));
+  // Evento: si corrió algún paso (placa nueva, cambio de estado, fallo de un agente), parte a Pedrito si cambió algo.
+  if (corridos > 0) await parteSiCambio('motor');
   return corridos;
 }
 
