@@ -41,7 +41,7 @@ Cada pedido elige su línea (`fab_pedidos.linea`). La **clásica** es la tabla d
 | **Producción** | Toma la imagen confirmada, activa el QR del lote, verifica en Supabase que ese QR sea del pedido y apunte al link, arma el PDF A4 con dos placas 10 × 15 y prueba que el link abra. |
 
 - **Reglas aprendidas:** cada corrección de Pedrito trae una regla de una línea. El agente corregido la guarda en `fab_reglas_agente` y relee todas sus reglas antes de cada trabajo. Se ven y se apagan en Ajustes. Las de pedidos de prueba quedan marcadas y no las leen los reales.
-- **Necesita** `GEMINI_API_KEY` en Vercel (y opcional `GEMINI_IMAGE_MODEL`, por defecto `gemini-3-pro-image-preview`). `/api/salud` muestra si está.
+- **Necesita** una clave para las imágenes en Vercel: `AI_GATEWAY_API_KEY` (Vercel AI Gateway, se paga con créditos de Vercel y tiene prioridad) o `GEMINI_API_KEY` (Google directo, pide facturación en Google con tarjeta no prepaga). Opcional `GEMINI_IMAGE_MODEL`, por defecto `gemini-3-pro-image-preview` (en el Gateway se pide como `google/gemini-3-pro-image`). `/api/salud` muestra por dónde salen las imágenes.
 - **Prueba sin IA:** con «Prueba sin IA» la línea del equipo corre con agentes simulados (Pedrito corrige una vez a Diseño para probar las reglas) y Producción hace todo salvo activar el QR.
 - El formulario propone el equipo por defecto; el webhook usa la clásica salvo que mande `"linea": "equipo"`.
 
