@@ -1,5 +1,5 @@
 import { env } from '../env';
-import { ErrorPaso } from '../ia/claude';
+import { ErrorEspera, ErrorFrenado, ErrorPaso, ErrorSinRespuesta } from '../ia/claude';
 import { db, registrarEvento, revisar } from '../supabase';
 import type { Json } from '../tipos-db';
 import { AGENTES, AGENTES_SIMULADOS } from '../agentes';
@@ -49,6 +49,12 @@ export async function correrMotor(inicio = Date.now()): Promise<number> {
   return corridos;
 }
 
+/** Un solo reintento automático y solo para errores pasajeros (límite de uso, falla del proveedor). Nunca en loop. */
+export function puedeReintentar(error: ErrorPaso, intento: number, maxIntentos: number) {
+  if (error instanceof ErrorSinRespuesta || !error.reintentable) return false;
+  return intento < Math.min(2, maxIntentos);
+}
+
 async function correrUnPaso(hasta: number): Promise<boolean> {
   const tomados = revisar(await db().rpc('fab_tomar_paso', { p_atasco_seg: env.duracionMaxSeg + 30 }), 'tomar paso');
   const paso = tomados?.[0];
@@ -81,7 +87,8 @@ async function correrUnPaso(hasta: number): Promise<boolean> {
     registrar: (mensaje, op) => registrarEvento(pedido.id, mensaje, { pasoId: paso.id, ...op }),
   };
 
-  await ctx.registrar(`Empieza: ${NOMBRE_PASO[tipo]}${paso.intento > 1 ? ` (intento ${paso.intento})` : ''}.`);
+  // Mientras espera a Pedrito el paso vuelve cada 20 s: el «Empieza» se anota una sola vez.
+  if (!paso.error?.startsWith('Esperando')) await ctx.registrar(`Empieza: ${NOMBRE_PASO[tipo]}${paso.intento > 1 ? ` (intento ${paso.intento})` : ''}.`);
   try {
     const r = await agente(ctx);
     const cerrado = revisar(
@@ -106,13 +113,23 @@ async function correrUnPaso(hasta: number): Promise<boolean> {
     await ctx.registrar(r.resumen);
     if (pedido.simulado && pedido.auto_aprobar) await autoResolverPrevias(pedido.id);
   } catch (e) {
+    if (e instanceof ErrorFrenado) {
+      await ctx.registrar(e.message, { nivel: 'aviso' });
+      return true;
+    }
+    if (e instanceof ErrorEspera) {
+      // Esperar (a Pedrito, a otra vuelta) no es fallar: vuelve a la cola sin gastar un intento.
+      await db().rpc('fab_esperar_paso', { p_paso: paso.id, p_intento: paso.intento, p_segundos: e.segundos, p_nota: e.message });
+      return true;
+    }
     const error = e instanceof ErrorPaso ? e : new ErrorPaso(e instanceof Error ? e.message : String(e), true, 60);
     console.error(`Paso ${tipo} (${paso.id}) falló:`, error.message);
-    if (error.reintentable && paso.intento < paso.max_intentos) {
-      const espera = Math.min(error.esperaSeg * paso.intento, 900);
+    if (puedeReintentar(error, paso.intento, paso.max_intentos)) {
+      const espera = Math.min(error.esperaSeg, 900);
       await db().rpc('fab_reprogramar_paso', { p_paso: paso.id, p_intento: paso.intento, p_error: error.message, p_segundos: espera });
-      await ctx.registrar(`Falló el intento ${paso.intento}, se reintenta en ${espera} s: ${error.message}`, { nivel: 'aviso' });
+      await ctx.registrar(`Falló el intento ${paso.intento}, se reintenta una sola vez en ${espera} s: ${error.message}`, { nivel: 'aviso' });
     } else {
+      // Sin respuesta, sin saldo o ya reintentado: el pedido queda esperando a Tomi con el motivo (no sigue solo).
       await db().rpc('fab_fallo_generico', { p_paso: paso.id, p_error: error.message });
     }
   }

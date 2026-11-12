@@ -4,7 +4,7 @@ import { datosParaPrevia } from '@/lib/consultas';
 import { urlQr } from '@/lib/motor/flujo';
 import { EXTRA_TOPE_USD } from '@/lib/motor/previas';
 import type { ChequeoSvg } from '@/lib/placa/svg';
-import type { ConceptoRow, PasoRow, PreviaRow, VersionRow } from '@/lib/tipos-db';
+import type { ConceptoRow, CorreccionPedidoRow, PasoRow, PreviaRow, VersionRow } from '@/lib/tipos-db';
 import { BotonEnviar } from './BotonEnviar';
 import { FormAccion } from './FormAccion';
 import { ImagenArchivo } from './ImagenArchivo';
@@ -63,7 +63,16 @@ export async function TarjetaPrevia({ previa, comercio, pedidoNumero, conEnlace 
       {previa.tipo === 'elegir_concepto' && (
         <ElegirConcepto previa={previa} conceptos={(extra as { conceptos: ConceptoRow[] }).conceptos ?? []} versiones={(extra as { versiones: VersionRow[] }).versiones ?? []} />
       )}
-      {previa.tipo === 'aprobar_final' && <AprobarFinal previa={previa} d={d} version={(extra as { version?: VersionRow | null }).version ?? null} />}
+      {previa.tipo === 'aprobar_final' && (
+        <AprobarFinal
+          previa={previa}
+          d={d}
+          version={(extra as { version?: VersionRow | null }).version ?? null}
+          versiones={(extra as { versiones?: Pick<VersionRow, 'id' | 'numero'>[] }).versiones ?? []}
+          correcciones={(extra as { correcciones?: CorreccionPedidoRow[] }).correcciones ?? []}
+          revision={(extra as { revision?: RevisionPedrito | null }).revision ?? null}
+        />
+      )}
       {previa.tipo === 'tope_gasto' && (
         <div className="acts">
           <FormAccion accion={responderPrevia}>
@@ -169,10 +178,36 @@ function ElegirConcepto({ previa, conceptos, versiones }: { previa: PreviaRow; c
   );
 }
 
-function AprobarFinal({ previa, d, version }: { previa: PreviaRow; d: Datos; version: VersionRow | null }) {
+type RevisionPedrito = { respuesta: string; alertas: unknown; version_numero: number };
+
+const RESPUESTA_PEDRITO: Record<string, string> = {
+  pendiente: 'todavía no contestó',
+  ok: 'la revisó y está bien',
+  alerta: 'avisó un problema',
+  sin_respuesta: 'no contestó a tiempo',
+  no_enviado: 'no la recibió (el parte no salió)',
+};
+
+function AprobarFinal({
+  previa,
+  d,
+  version,
+  versiones,
+  correcciones,
+  revision,
+}: {
+  previa: PreviaRow;
+  d: Datos;
+  version: VersionRow | null;
+  versiones: Pick<VersionRow, 'id' | 'numero'>[];
+  correcciones: CorreccionPedidoRow[];
+  revision: RevisionPedrito | null;
+}) {
+  const alertas = Array.isArray(revision?.alertas) ? (revision!.alertas as { detalle?: string }[]) : [];
   const qr = d.qr_siguiente as { n: number; codigo: string; lote: string } | null;
   const puntajes = (d.puntajes ?? {}) as Record<string, number>;
   const pendientes = (d.pendientes ?? []) as string[];
+  const noCumple = d.no_cumple === true;
   return (
     <div className="final">
       <div className="placa">{version && <ImagenArchivo path={version.preview_path} alt="Placa final" />}</div>
@@ -188,9 +223,21 @@ function AprobarFinal({ previa, d, version }: { previa: PreviaRow; d: Datos; ver
             ))}
           </div>
         )}
+        {version && <p className="small muted">Versión {version.numero}</p>}
+        {revision && (
+          <p className={revision.respuesta === 'alerta' ? 'alerta' : 'small muted'}>
+            Pedrito (versión {revision.version_numero}): {RESPUESTA_PEDRITO[revision.respuesta] ?? revision.respuesta}
+            {alertas.length > 0 && `: ${alertas.map((a) => a.detalle).join(' · ')}`}
+          </p>
+        )}
+        {noCumple && (
+          <div className="alerta">
+            <b>Pedrito NO aprobó esta versión.</b> No cumple después de las rondas automáticas: pedí cambios o, si igual te sirve, aprobala vos.
+          </div>
+        )}
         {pendientes.length > 0 && (
           <div className="alerta">
-            El revisor todavía marca:
+            {noCumple ? 'Lo que no cumple:' : 'El revisor todavía marca:'}
             <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
               {pendientes.map((p) => (
                 <li key={p}>{p}</li>
@@ -220,7 +267,31 @@ function AprobarFinal({ previa, d, version }: { previa: PreviaRow; d: Datos; ver
           <summary>Pedir cambios</summary>
           <FormAccion accion={responderPrevia} className="grid">
             <Oculto previa={previa} accion="cambios" />
-            <textarea name="comentario" placeholder="¿Qué cambiar?" rows={3} required />
+            {correcciones.length > 0 && (
+              <div className="small">
+                Tus correcciones de este pedido (se suman todas, ninguna se pierde):
+                <ol style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                  {correcciones.map((c) => (
+                    <li key={c.id}>{c.texto}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            <textarea name="comentario" placeholder="¿Qué cambiar en la imagen?" rows={3} required />
+            <label className="campo">
+              Partir de
+              <small>Si elegís una versión, Gemini edita esa imagen en vez de hacer una nueva de cero. También podés escribir «partí de la versión 3».</small>
+              <select name="base_version_id" defaultValue="">
+                <option value="">Imagen nueva desde cero</option>
+                {versiones.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    Versión {v.numero}
+                    {v.id === version?.id ? ' (esta)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="small muted">El logo, el nombre, el rubro, la ciudad y los textos no se piden acá: cambialos en «Datos del comercio», en la página del pedido (no gasta imagen).</p>
             <Recordar />
             <div className="acts">
               <BotonEnviar clase="btn" pendiente="Enviando…">

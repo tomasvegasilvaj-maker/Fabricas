@@ -2,6 +2,8 @@ import { db, registrarEvento, revisar } from '../supabase';
 import type { Json, PreviaRow, VersionRow } from '../tipos-db';
 import type { EstadoPedido, Etapa, Siguiente } from './tipos';
 import { guardarLogoOriginal } from './pedidos';
+import { agregarCorreccion, versionDePartida } from './ficha';
+import { darPorVistasLasRevisiones } from '../parte/version';
 
 export const EXTRA_TOPE_USD = 1.5;
 
@@ -142,7 +144,21 @@ export async function aprobarFinal(previaId: string, op: { destino: string }) {
 }
 
 /** Pedís cambios sobre la placa final: vuelve a elaboración y a revisión. */
-export async function pedirCambios(previaId: string, op: { comentario: string; recordar?: boolean }) {
+/** La versión de la que hay que partir: la elegida en la lista o la que nombra el comentario («partí de la versión 3»). */
+async function versionBase(pedidoId: string, elegida: string | null | undefined, comentario: string): Promise<{ id: string; numero: number } | null> {
+  if (elegida) {
+    const { data } = await db().from('fab_versiones').select('id, numero').eq('id', elegida).eq('pedido_id', pedidoId).maybeSingle();
+    if (!data) throw new Error('Esa versión no es de este pedido.');
+    return data;
+  }
+  const n = versionDePartida(comentario);
+  if (n === null) return null;
+  const { data } = await db().from('fab_versiones').select('id, numero').eq('pedido_id', pedidoId).eq('numero', n).eq('origen', 'diseno').maybeSingle();
+  if (!data) throw new Error(`No encontré la versión ${n} de este pedido con imagen de Diseño.`);
+  return data;
+}
+
+export async function pedirCambios(previaId: string, op: { comentario: string; recordar?: boolean; baseVersionId?: string | null }) {
   const previa = await leerPrevia(previaId, ['aprobar_final']);
   const comentario = op.comentario.trim();
   if (!comentario) throw new Error('Escribí qué cambiar.');
@@ -150,6 +166,9 @@ export async function pedirCambios(previaId: string, op: { comentario: string; r
   await db().from('fab_pedidos').update({ ronda: 0 }).eq('id', previa.pedido_id);
   let ok: boolean;
   if (await esEquipo(previa.pedido_id)) {
+    const base = await versionBase(previa.pedido_id, op.baseVersionId, comentario);
+    // La corrección va a la ficha del pedido: Diseño arma el prompt con todas, en orden.
+    await agregarCorreccion({ pedidoId: previa.pedido_id, texto: comentario, versionId: versionId || null, baseVersionId: base?.id ?? null });
     // Vuelve a Diseño con el mismo concepto y tu pedido; después pasa otra vez por Pedrito y Estructura.
     const version = revisar(await db().from('fab_versiones').select('concepto_id').eq('id', versionId).single(), 'leer versión');
     const { data: pasoPedrito } = await db()
@@ -165,7 +184,7 @@ export async function pedirCambios(previaId: string, op: { comentario: string; r
     ok = await resolver(
       previa,
       { cambios: comentario },
-      [{ tipo: 'diseno', entrada: { concepto_id: version.concepto_id, indicaciones, comentario_tomi: comentario, ronda: 1 } }],
+      [{ tipo: 'diseno', entrada: { concepto_id: version.concepto_id, indicaciones, ronda: 1, base_version_id: base?.id ?? null } }],
       'en_marcha',
       'diseno',
     );
@@ -202,6 +221,8 @@ export async function reintentarFallo(previaId: string, op: { destino?: string |
     const anterior = entradaPaso && typeof entradaPaso === 'object' && !Array.isArray(entradaPaso) ? entradaPaso : {};
     entradaPaso = { ...anterior, destino: nuevoDestino };
   }
+  // Si el aviso era de Pedrito (alerta o sin respuesta), reintentar es seguir igual: no se vuelve a esperar esa revisión.
+  if (paso.tipo === 'diseno') await darPorVistasLasRevisiones(previa.pedido_id);
   const ok = await resolver(previa, { accion: 'reintentar', ...(nuevoDestino ? { destino: nuevoDestino } : {}) }, [{ tipo: paso.tipo as Siguiente['tipo'], entrada: entradaPaso }], 'en_marcha');
   if (ok) await registrarEvento(previa.pedido_id, `Reintentaste el paso ${paso.tipo}${nuevoDestino ? ` con el link ${nuevoDestino}` : ''}.`);
   return ok;

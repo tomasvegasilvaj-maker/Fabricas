@@ -9,6 +9,7 @@ import type { AgenteEquipo, Agente, ContextoPaso, ResultadoPaso } from '../../mo
 import { bajarArchivo, db, revisar } from '../../supabase';
 import type { ConceptoRow, Json } from '../../tipos-db';
 import { entrada, fichaComercio, logoDelComercio, SISTEMA_FABRICA, textoObjetivo, textoPreferencias } from '../comun';
+import { correccionesDelPedido } from '../../motor/ficha';
 import { leerPaso, MAX_RONDAS, objeto, reglaDeUnaLinea, type Correccion } from './comun';
 import type { ResultadoEstructura } from './estructura';
 import type { PruebaEnlace, VerificacionQr } from './produccion';
@@ -38,7 +39,7 @@ function lista(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : [];
 }
 
-async function previaConfirmacion(ctx: ContextoPaso, versionId: string, resumen: string, pendientes: string[]): Promise<ResultadoPaso> {
+async function previaConfirmacion(ctx: ContextoPaso, versionId: string, resumen: string, pendientes: string[], noCumple = false): Promise<ResultadoPaso> {
   const { comercio, pedido } = ctx;
   const placeId = (comercio.investigacion as { contacto?: { place_id?: string | null } } | null)?.contacto?.place_id ?? null;
   const sugerido = destinoSugerido(pedido.objetivo, comercio, placeId);
@@ -46,15 +47,20 @@ async function previaConfirmacion(ctx: ContextoPaso, versionId: string, resumen:
   const { data: qr } = await db().rpc('fab_asignar_qr', { p_pedido: pedido.id, p_url: destino || 'https://example.com', p_etiqueta: 'consulta', p_simular: true });
   return {
     salida: { version_id: versionId, pendientes, destino_sugerido: destino },
-    resumen: `Pedrito dio el visto bueno a la versión y te la pasa para que la confirmes.${pendientes.length ? ` Pendientes: ${pendientes.join(' ')}` : ''}`,
+    resumen: noCumple
+      ? `La versión NO cumple después de las rondas permitidas: Pedrito no la aprueba y te la devuelve para que decidas. Problemas: ${pendientes.join(' ')}`
+      : `Pedrito dio el visto bueno a la versión y te la pasa para que la confirmes.${pendientes.length ? ` Pendientes: ${pendientes.join(' ')}` : ''}`,
     previa: {
       tipo: 'aprobar_final',
-      titulo: `Confirmá la placa de ${comercio.nombre}`,
-      detalle: 'Pedrito ya le dio el visto bueno. Si te gusta, confirmá el link: Producción activa el QR del lote, arma el PDF A4 con dos placas y prueba que el link abra.',
+      titulo: noCumple ? `La placa de ${comercio.nombre} NO cumple: decidí vos` : `Confirmá la placa de ${comercio.nombre}`,
+      detalle: noCumple
+        ? 'Pedrito no la aprobó y ya no quedan rondas automáticas. Pedí cambios (podés partir de esta versión) o, si igual te sirve, aprobala vos.'
+        : 'Pedrito ya le dio el visto bueno. Si te gusta, confirmá el link: Producción activa el QR del lote, arma el PDF A4 con dos placas y prueba que el link abra.',
       datos: {
         version_id: versionId,
         resumen,
         pendientes,
+        no_cumple: noCumple,
         destino_sugerido: destino,
         destino_explicacion: pedido.destino_url ? 'Link que cargaste en el pedido.' : sugerido.explicacion,
         qr_siguiente: qr?.[0] ?? null,
@@ -63,6 +69,11 @@ async function previaConfirmacion(ctx: ContextoPaso, versionId: string, resumen:
     pedidoEstado: 'en_espera',
     pedidoEtapa: 'aprobacion',
   };
+}
+
+/** Pedrito devolvió el trabajo sin escribir qué cambiar: igual vuelve, con su motivo (nunca se aprueba por omisión). */
+function sinCorreccion(motivo: string): Correccion {
+  return { texto: motivo.trim() || 'Pedrito no lo aprobó: revisalo contra el concepto y la plantilla.', regla: '' };
 }
 
 function fallo(pasoId: string, tipo: AgenteEquipo, titulo: string, detalle: string, salida: Json): ResultadoPaso {
@@ -99,11 +110,22 @@ export function crearPedrito(juez: Juez): Agente {
       if (conceptos.length === 0) throw new Error('Ideas no dejó conceptos para revisar.');
       const ultima = ronda >= MAX_RONDAS.ideas;
       const d = await juez.ideas(ctx, { conceptos, ultima, ronda });
-      if (!d.aprobar && !ultima && d.correccion) {
+      if (!d.aprobar && ultima) {
+        // Nunca aprueba lo que no cumple «por ser la última»: se lo devuelve a Tomi.
+        return fallo(
+          paso.id,
+          'ideas',
+          'Pedrito no aprobó las ideas',
+          `Después de ${ronda} rondas las ideas siguen sin cumplir: ${d.motivo}${d.correccion?.texto ? ` (${d.correccion.texto})` : ''} Con «Reintentar» Ideas propone otra tanda; si no, cancelá el pedido.`,
+          { decision: 'devolver_a_tomi', motivo: d.motivo },
+        );
+      }
+      if (!d.aprobar) {
+        const correccion = d.correccion ?? sinCorreccion(d.motivo);
         return {
-          salida: { decision: 'corregir', motivo: d.motivo, correccion: d.correccion },
-          resumen: `Pedrito le devuelve el trabajo a Ideas: ${d.correccion.texto} Regla nueva: «${d.correccion.regla}».`,
-          siguientes: [{ tipo: 'ideas', entrada: { ronda: ronda + 1, correccion: d.correccion } }],
+          salida: { decision: 'corregir', motivo: d.motivo, correccion },
+          resumen: `Pedrito le devuelve el trabajo a Ideas: ${correccion.texto}${correccion.regla ? ` Regla nueva: «${correccion.regla}».` : ''}`,
+          siguientes: [{ tipo: 'ideas', entrada: { ronda: ronda + 1, correccion } }],
           pedidoEtapa: 'ideas',
         };
       }
@@ -127,16 +149,23 @@ export function crearPedrito(juez: Juez): Agente {
       if (!versionId || !vistaPath) throw new Error('Diseño no dejó la versión a revisar.');
       const concepto = revisar(await db().from('fab_conceptos').select('*').eq('id', contexto.concepto_id).single(), 'leer concepto');
       const ultima = ronda >= MAX_RONDAS.diseno;
-      const d = await juez.diseno(ctx, { vista: await bajarArchivo(vistaPath), concepto, indicaciones: contexto.indicaciones, comentarioTomi: contexto.comentario_tomi, ultima, ronda });
-      if (!d.aprobar && !ultima && d.correccion) {
+      const ficha = await correccionesDelPedido(ctx.pedido.id);
+      const comentarioTomi = ficha.length ? ficha.map((c) => `${c.orden}. ${c.texto}`).join('\n') : contexto.comentario_tomi;
+      const d = await juez.diseno(ctx, { vista: await bajarArchivo(vistaPath), concepto, indicaciones: contexto.indicaciones, comentarioTomi, ultima, ronda });
+      if (!d.aprobar && ultima) {
+        // Última ronda y no cumple: no se aprueba igual, se le devuelve a Tomi con los motivos.
+        return previaConfirmacion(ctx, versionId, `No cumple tras ${ronda} rondas: ${d.motivo}`, [d.motivo, ...d.observaciones, ...(d.correccion?.texto ? [d.correccion.texto] : [])], true);
+      }
+      if (!d.aprobar) {
+        const correccion = d.correccion ?? sinCorreccion(d.motivo);
         return {
-          salida: { decision: 'corregir', motivo: d.motivo, correccion: d.correccion },
-          resumen: `Pedrito le devuelve la imagen a Diseño (ronda ${ronda + 1}): ${d.correccion.texto} Regla nueva: «${d.correccion.regla}».`,
-          siguientes: [{ tipo: 'diseno', entrada: { ...contexto, ronda: ronda + 1, correccion: d.correccion } }],
+          salida: { decision: 'corregir', motivo: d.motivo, correccion },
+          resumen: `Pedrito le devuelve la imagen a Diseño (ronda ${ronda + 1}): ${correccion.texto}${correccion.regla ? ` Regla nueva: «${correccion.regla}».` : ''}`,
+          siguientes: [{ tipo: 'diseno', entrada: { ...contexto, ronda: ronda + 1, correccion } }],
           pedidoEtapa: 'diseno',
         };
       }
-      const observaciones = d.aprobar ? d.observaciones : [...d.observaciones, `Pedrito no quedó conforme tras ${ronda} rondas: ${d.motivo}`];
+      const observaciones = d.observaciones;
       return {
         salida: { decision: 'aprobar', version_id: versionId, motivo: d.motivo, observaciones },
         resumen: `Pedrito aprobó la imagen de la ronda ${ronda} y se la pasa a Estructura. ${d.motivo}`,
@@ -166,7 +195,14 @@ export function crearPedrito(juez: Juez): Agente {
         };
       }
       const pendientes = [...observaciones, ...fallas];
-      return previaConfirmacion(ctx, r.version_id, fallas.length ? 'La plantilla está en su lugar, con detalles de la imagen sin resolver.' : 'Cumple la plantilla: logo, NFC, QR con su texto y pie.', pendientes);
+      // Si Estructura sigue marcando fallas en la última ronda, no se aprueba: decide Tomi.
+      return previaConfirmacion(
+        ctx,
+        r.version_id,
+        fallas.length ? 'No cumple la estructura después de las rondas permitidas.' : 'Cumple la plantilla: logo, NFC, QR con su texto y pie.',
+        pendientes,
+        fallas.length > 0,
+      );
     }
 
     if (e.revisar === 'produccion') {
@@ -215,7 +251,7 @@ async function sistemaPedrito(ctx: ContextoPaso, agente: AgenteEquipo, ultima: b
 Sos Pedrito, el jefe del equipo de la fábrica. Tu equipo: Ideas (conceptos según el rubro), Diseño (la imagen con una IA de imágenes), Estructura (que se cumpla la plantilla) y Producción (PDF, QR y link). Ahora revisás el trabajo de ${agente === 'ideas' ? 'Ideas' : 'Diseño'} y das el visto bueno o lo devolvés.
 
 Sos exigente pero práctico: devolvés solo si hay un problema real que se puede arreglar en otra ronda, no por gustos menores.
-${ultima ? 'ESTA ES LA ÚLTIMA RONDA: tenés que aprobar (elegí lo mejor que hay) y anotar lo que quede pendiente.' : ''}
+${ultima ? 'ESTA ES LA ÚLTIMA RONDA AUTOMÁTICA. Aprobá SOLO si cumple de verdad. Si no cumple, NO lo apruebes por ser la última: devolvé "corregir" con el motivo y se lo pasamos a Tomi para que decida.' : ''}
 
 Si corregís:
 - "correccion": qué cambiar en esta entrega, concreto y accionable.
@@ -232,11 +268,12 @@ ${await reglasActuales('pedrito')}
 ${await textoPreferencias(ctx.comercio.rubro)}`;
 }
 
-function correccionDe(d: { decision: string; correccion: string; regla: string; regla_solo_para_este_rubro: boolean }): Correccion | null {
+/** Si Pedrito devuelve el trabajo sin escribir la corrección, se usa su motivo (devolver nunca se vuelve aprobar). */
+function correccionDe(d: { decision: string; correccion: string; regla: string; regla_solo_para_este_rubro: boolean; motivo: string }): Correccion | null {
   if (d.decision !== 'corregir') return null;
-  const regla = reglaDeUnaLinea(d.regla);
-  if (!d.correccion.trim() || !regla) return null;
-  return { texto: d.correccion.trim(), regla, solo_rubro: d.regla_solo_para_este_rubro };
+  const texto = d.correccion.trim() || d.motivo.trim();
+  if (!texto) return null;
+  return { texto, regla: reglaDeUnaLinea(d.regla), solo_rubro: d.regla_solo_para_este_rubro };
 }
 
 export const juezConIA: Juez = {
@@ -263,7 +300,7 @@ export const juezConIA: Juez = {
     if (!r.datos) throw new Error('Pedrito no devolvió su decisión sobre las ideas.');
     const correccion = correccionDe(r.datos);
     return {
-      aprobar: r.datos.decision === 'aprobar' || !correccion,
+      aprobar: r.datos.decision === 'aprobar',
       elegido: Math.min(Math.max(Math.round(r.datos.elegido) || 1, 1), conceptos.length),
       indicaciones: r.datos.indicaciones_para_diseno,
       correccion,
@@ -286,7 +323,7 @@ export const juezConIA: Juez = {
     });
     if (!r.datos) throw new Error('Pedrito no devolvió su decisión sobre la imagen.');
     const correccion = correccionDe(r.datos);
-    return { aprobar: r.datos.decision === 'aprobar' || !correccion, correccion, motivo: r.datos.motivo, observaciones: r.datos.observaciones };
+    return { aprobar: r.datos.decision === 'aprobar', correccion, motivo: r.datos.motivo, observaciones: r.datos.observaciones };
   },
 };
 

@@ -25,6 +25,38 @@ export class ErrorPaso extends Error {
   }
 }
 
+/** El trabajador (o la IA) no contestó a tiempo: el pedido queda en pausa y se le avisa a Tomi; no se reintenta solo. */
+export class ErrorSinRespuesta extends ErrorPaso {
+  constructor(mensaje: string) {
+    super(mensaje, false);
+    this.name = 'ErrorSinRespuesta';
+  }
+}
+
+/** Hay que esperar algo (la respuesta de Pedrito, otra vuelta del motor): vuelve a la cola sin gastar un intento. */
+export class ErrorEspera extends ErrorPaso {
+  constructor(
+    mensaje: string,
+    readonly segundos: number,
+  ) {
+    super(mensaje, true, segundos);
+    this.name = 'ErrorEspera';
+  }
+}
+
+/** El agente ya dejó el paso frenado (por ejemplo, por el tope de gasto): el motor no tiene que tocarlo. */
+export class ErrorFrenado extends ErrorPaso {
+  constructor(mensaje: string) {
+    super(mensaje, false);
+    this.name = 'ErrorFrenado';
+  }
+}
+
+/** Anthropic sin saldo: lo dice su error 400 «credit balance is too low». */
+export function esSinSaldo(texto: string) {
+  return /credit balance is too low|insufficient[_ ]credits?|sin saldo|no tiene cr[eé]dito/i.test(texto);
+}
+
 export type ContextoIA = {
   pedidoId: string;
   pasoId: string;
@@ -72,7 +104,7 @@ async function sumarCosto(ctx: ContextoIA, usd: number) {
 export function traducirError(e: unknown, porTiempo: boolean): ErrorPaso {
   if (e instanceof ErrorPaso) return e;
   if (porTiempo || e instanceof Anthropic.APIUserAbortError) {
-    return new ErrorPaso('La llamada a la IA tardó más de lo que permite una vuelta del motor y se cortó.', true, 5);
+    return new ErrorSinRespuesta('La IA no respondió a tiempo (tardó más de lo que permite una vuelta del motor). El pedido quedó en pausa.');
   }
   if (e instanceof Anthropic.APIError) {
     const s = e.status;
@@ -80,7 +112,8 @@ export function traducirError(e: unknown, porTiempo: boolean): ErrorPaso {
     console.error(`Anthropic contestó ${s ?? 'sin conexión'}: ${motivo}`);
     if (s === 401) return new ErrorPaso(`Anthropic no aceptó la clave (${motivo}). Cambiá ANTHROPIC_API_KEY en Vercel y volvé a desplegar.`, false);
     if (s === 403) return new ErrorPaso(`Anthropic no deja usar esta clave para este paso (${motivo}).`, false);
-    if (s === 429) return new ErrorPaso('La API de Anthropic pidió esperar (límite de uso). Se reintenta solo.', true, 120);
+    if (s === 429) return new ErrorPaso('La API de Anthropic pidió esperar (límite de uso). Se reintenta una vez.', true, 120);
+    if (esSinSaldo(motivo)) return new ErrorPaso(`Anthropic no tiene saldo: cargá crédito en console.anthropic.com → Billing y reintentá (${motivo}).`, false);
     if (s !== undefined && s >= 400 && s < 500) return new ErrorPaso(`La API de Anthropic rechazó el pedido (${s}): ${motivo}`, false);
     return new ErrorPaso(`La API de Anthropic falló (${s ?? 'sin conexión'}): ${motivo}`, true, 60);
   }

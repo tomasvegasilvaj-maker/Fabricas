@@ -2,7 +2,7 @@
 // Gemini/A4 que NO genera imágenes (cada imagen cuesta plata).
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
-import { modeloImagen, proveedorImagen } from '../ia/gemini';
+import { modeloImagen, proveedorImagen, saldoImagenes, saldoMinimoUsd } from '../ia/gemini';
 import { pdfA4DosPlacas } from '../placa/pdf';
 import { db } from '../supabase';
 
@@ -104,6 +104,11 @@ export async function leerEstado(opciones: { gemini?: () => Promise<EstadoGemini
   }
 
   const g = await gemini;
+  // Aviso antes de quedarse sin saldo de imágenes (el de Anthropic no se puede consultar por API).
+  const saldo = opciones.gemini ? null : await saldoImagenes().catch(() => null);
+  if (saldo?.saldo !== null && saldo?.saldo !== undefined && saldo.saldo < saldoMinimoUsd()) {
+    errores.push({ donde: 'Saldo de imágenes (Vercel AI Gateway)', mensaje: `Queda poco saldo: ${saldo.detalle} (aviso por debajo de US$ ${saldoMinimoUsd().toFixed(2)}).`, agente: 'app', clave: 'saldo-bajo' });
+  }
   if (g.estado === 'error') errores.push({ donde: 'Generación del A4 (Gemini + pdf-lib)', mensaje: g.detalle, agente: 'produccion', clave: `gemini:${g.detalle.slice(0, 40)}` });
 
   const { data: version } = ids.length
@@ -128,7 +133,8 @@ export function firmaEstado(e: EstadoFabrica): string {
     base: e.base,
     placas: e.placas_hechas,
     negocios: e.negocios_activos,
-    pedidos: e.pedidos.map((p) => [p.id, p.estado, p.etapa]),
+    // Solo el estado de cada pedido (no la etapa): pasar de un agente a otro no es un cambio que valga un parte.
+    pedidos: e.pedidos.map((p) => [p.id, p.estado]),
     errores: e.errores.map((x) => x.clave).sort(),
     gemini: e.gemini_a4.estado,
   };

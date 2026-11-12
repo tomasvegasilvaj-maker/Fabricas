@@ -7,6 +7,7 @@ import { faltaBase } from '@/lib/configuracion';
 import { loteQr, parteUltimo, preferencias, promptsPorRubro, reglasEquipo } from '@/lib/consultas';
 import { env } from '@/lib/env';
 import { estadoLatido } from '@/lib/motor/secreto';
+import { saldoImagenes, saldoMinimoUsd } from '@/lib/ia/gemini';
 
 export const metadata: Metadata = { title: 'Ajustes' };
 
@@ -24,6 +25,8 @@ const VARIABLES: { nombre: string; para: string; obligatoria: boolean }[] = [
   { nombre: 'PARTE_WEBHOOK_URL', para: 'Webhook de la rutina «Parte automático Fábrica» de Pedrito', obligatoria: false },
   { nombre: 'PARTE_WEBHOOK_SECRET', para: 'Secreto con el que la app firma el parte (Authorization: Bearer)', obligatoria: false },
   { nombre: 'PARTE_CORRECCIONES_SECRET', para: 'Secreto que Pedrito manda a /api/parte/correcciones', obligatoria: false },
+  { nombre: 'PEDRITO_ESPERA_SEG', para: 'Cuánto se espera la revisión de Pedrito antes de pausar el pedido (por defecto 300 s)', obligatoria: false },
+  { nombre: 'SALDO_MINIMO_USD', para: 'Debajo de este saldo del AI Gateway la app avisa (por defecto US$ 2)', obligatoria: false },
   { nombre: 'CRON_SECRET', para: 'Chequeo diario de respaldo del Vercel Cron (sin esto queda el de Supabase cada 30 min)', obligatoria: false },
 ];
 
@@ -47,6 +50,7 @@ export default async function Ajustes() {
         parteUltimo().catch(() => null),
       ])
     : [[], [], null, [], [], null];
+  const saldo = conBase ? await saldoImagenes().catch(() => null) : null;
   const resumenParte = Array.isArray((parte?.parte as { resumen?: unknown } | null)?.resumen) ? ((parte!.parte as { resumen: string[] }).resumen) : [];
   const conteo = lote.reduce<Record<string, number>>((acc, q) => ({ ...acc, [q.estado]: (acc[q.estado] ?? 0) + 1 }), {});
   const proximo = lote.find((q) => q.estado === 'libre');
@@ -173,6 +177,12 @@ export default async function Ajustes() {
               correcciones a <span className="mono">{env.appUrl}/api/parte/correcciones</span> y quedan en la tabla de reglas de abajo.
             </p>
             <div className="small" style={{ marginTop: 10 }}>
+              {saldo && (
+                <p className={saldo.saldo !== null && saldo.saldo < saldoMinimoUsd() ? 'alerta' : 'muted'}>
+                  Imágenes: {saldo.detalle}
+                  {saldo.saldo !== null && saldo.saldo < saldoMinimoUsd() ? ' · queda poco, cargá crédito en Vercel → AI Gateway.' : ''} Anthropic no informa el saldo por API: si se queda sin crédito, el pedido se frena y te avisa.
+                </p>
+              )}
               <div>
                 Último parte: <b>{parte?.enviado_at ? `${fecha(parte.enviado_at)} (${parte.motivo === 'error' ? 'error' : 'cambio de estado'})` : 'todavía ninguno'}</b>
               </div>

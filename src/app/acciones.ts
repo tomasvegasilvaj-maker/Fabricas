@@ -8,6 +8,7 @@ import { haySesion } from '@/lib/auth';
 import { correrMotor } from '@/lib/motor/motor';
 import { crearPedido, type ArchivoSubido } from '@/lib/motor/pedidos';
 import { parteSiCambio, revisarYMandarParte } from '@/lib/parte/parte';
+import { corregirFichaComercio } from '@/lib/motor/comercio';
 import {
   aprobarFinal,
   cancelarPedido,
@@ -143,7 +144,7 @@ export async function responderPrevia(_: EstadoAccion, fd: FormData): Promise<Es
         aviso = 'Aprobada: se activa el QR y se arman los archivos para imprimir.';
         break;
       case 'cambios':
-        ok = await pedirCambios(previaId, { comentario: texto(fd, 'comentario'), recordar });
+        ok = await pedirCambios(previaId, { comentario: texto(fd, 'comentario'), recordar, baseVersionId: texto(fd, 'base_version_id') || null });
         aviso = 'Cambios pedidos: la placa se rehace con tu comentario.';
         break;
       case 'seguir_tope':
@@ -266,6 +267,26 @@ export async function mandarParteDePrueba(_: EstadoAccion): Promise<EstadoAccion
     revalidatePath('/ajustes');
     if (r.enviado) return { ok: `Parte de prueba enviado (${r.capturas} captura${r.capturas === 1 ? '' : 's'}).` };
     return { error: r.detalle };
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+}
+
+/** Corrige nombre, rubro, ciudad o logo del comercio. No pasa por Gemini: la plantilla los dibuja encima. */
+export async function guardarFichaComercio(_: EstadoAccion, fd: FormData): Promise<EstadoAccion> {
+  const pedidoId = texto(fd, 'pedido_id');
+  try {
+    await exigirSesion();
+    const r = await corregirFichaComercio(pedidoId, {
+      nombre: texto(fd, 'nombre'),
+      rubro: texto(fd, 'rubro'),
+      ciudad: texto(fd, 'ciudad'),
+      logo: await archivo(fd, 'logo'),
+    });
+    revalidatePath(`/pedidos/${pedidoId}`);
+    revalidatePath('/', 'layout');
+    if (r.cambios.length === 0) return { ok: 'No había nada para cambiar.' };
+    return { ok: `Guardado: ${r.cambios.join(', ')}.${r.version ? ` La placa se rearmó como versión ${r.version}, con la misma imagen.` : ''}` };
   } catch (e) {
     return { error: mensaje(e) };
   }
