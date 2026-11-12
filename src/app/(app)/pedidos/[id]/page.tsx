@@ -159,7 +159,9 @@ export default async function Pedido({ params }: { params: Promise<{ id: string 
           <div className="section">
             <h3>Versiones</h3>
             {d.versiones.map((v) => {
-              const chequeo = v.chequeo as ChequeoSvg | null;
+              // Las versiones del equipo (Diseño con Gemini) guardan otro chequeo, sin errores ni avisos de SVG.
+              const crudo = v.chequeo as Partial<ChequeoSvg> | null;
+              const chequeo = crudo && Array.isArray(crudo.errores) && Array.isArray(crudo.avisos) ? (crudo as ChequeoSvg) : null;
               const rev = v.revision as { resumen?: string; veredicto?: string; puntajes?: Record<string, number>; problemas?: { gravedad: string; descripcion: string }[] } | null;
               return (
                 <div key={v.id} className="final" style={{ paddingBottom: 14, borderBottom: '1px dashed var(--line)' }}>
