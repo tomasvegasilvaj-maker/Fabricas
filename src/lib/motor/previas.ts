@@ -186,13 +186,39 @@ export async function seguirConTope(previaId: string, extra = EXTRA_TOPE_USD) {
   return ok;
 }
 
-/** Vuelve a encolar el paso que falló, con la misma entrada. */
-export async function reintentarFallo(previaId: string) {
+/**
+ * Vuelve a encolar el paso que falló, con la misma entrada. En Producción se puede cambiar el link de destino:
+ * el QR del pedido es el mismo y se reapunta al link nuevo.
+ */
+export async function reintentarFallo(previaId: string, op: { destino?: string | null } = {}) {
   const previa = await leerPrevia(previaId, ['fallo']);
   const pasoId = String(datos(previa).paso_id ?? '');
   const paso = revisar(await db().from('fab_pasos').select('tipo, entrada').eq('id', pasoId).single(), 'leer paso');
-  const ok = await resolver(previa, { accion: 'reintentar' }, [{ tipo: paso.tipo as Siguiente['tipo'], entrada: paso.entrada }], 'en_marcha');
-  if (ok) await registrarEvento(previa.pedido_id, `Reintentaste el paso ${paso.tipo}.`);
+  let entradaPaso = paso.entrada;
+  let nuevoDestino: string | null = null;
+  if (paso.tipo === 'produccion' && op.destino?.trim()) {
+    nuevoDestino = urlValida(op.destino);
+    if (!nuevoDestino) throw new Error('El link de destino no es válido (tiene que empezar con https://).');
+    const anterior = entradaPaso && typeof entradaPaso === 'object' && !Array.isArray(entradaPaso) ? entradaPaso : {};
+    entradaPaso = { ...anterior, destino: nuevoDestino };
+  }
+  const ok = await resolver(previa, { accion: 'reintentar', ...(nuevoDestino ? { destino: nuevoDestino } : {}) }, [{ tipo: paso.tipo as Siguiente['tipo'], entrada: entradaPaso }], 'en_marcha');
+  if (ok) await registrarEvento(previa.pedido_id, `Reintentaste el paso ${paso.tipo}${nuevoDestino ? ` con el link ${nuevoDestino}` : ''}.`);
+  return ok;
+}
+
+/**
+ * Producción ya armó los archivos pero el chequeo del link no pasó (un sitio que frena robots de otra forma):
+ * lo probaste con el celular y la das por lista igual.
+ */
+export async function darPorLista(previaId: string) {
+  const previa = await leerPrevia(previaId, ['fallo']);
+  if (datos(previa).tipo !== 'produccion') throw new Error('Solo se puede dar por lista cuando el aviso es de Producción.');
+  const pasoId = String(datos(previa).paso_id ?? '');
+  const paso = revisar(await db().from('fab_pasos').select('estado').eq('id', pasoId).single(), 'leer paso');
+  if (paso.estado !== 'hecho') throw new Error('Producción no llegó a armar los archivos: reintentá el paso.');
+  const ok = await resolver(previa, { accion: 'dar_por_lista' }, [], 'listo', 'listo');
+  if (ok) await registrarEvento(previa.pedido_id, 'Diste la placa por lista aunque el chequeo automático del link no pasó (probado a mano).', { nivel: 'aviso' });
   return ok;
 }
 

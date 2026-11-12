@@ -7,7 +7,7 @@ import { NOMBRE_PASO } from './flujo';
 import { patearMotor } from './patear';
 import { anotarUrlDelLatido } from './secreto';
 import { autoResolverPrevias } from './previas';
-import { PASOS_CON_IA, TIPOS_PASO, type ContextoPaso, type TipoPaso } from './tipos';
+import { gastaIA, TIPOS_PASO, type ContextoPaso, type TipoPaso } from './tipos';
 
 /** Después de un paso corto se sigue en la misma vuelta solo si queda tiempo para uno de IA. */
 const SEG_PARA_OTRO_PASO = 255;
@@ -63,7 +63,7 @@ async function correrUnPaso(hasta: number): Promise<boolean> {
     return true;
   }
 
-  if (PASOS_CON_IA.includes(tipo) && !pedido.simulado && Number(pedido.gasto_usd) >= Number(pedido.tope_usd)) {
+  if (gastaIA(tipo, paso.entrada) && !pedido.simulado && Number(pedido.gasto_usd) >= Number(pedido.tope_usd)) {
     await db().rpc('fab_frenar_por_tope', { p_paso: paso.id, p_intento: paso.intento });
     await registrarEvento(pedido.id, `Frenado por tope de gasto antes de: ${NOMBRE_PASO[tipo]}.`, { pasoId: paso.id, nivel: 'aviso' });
     return true;

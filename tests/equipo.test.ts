@@ -282,6 +282,26 @@ describe('Producción', () => {
       String(url).includes('/q/') ? respuesta(302, destino) : respuesta(404)) as typeof fetch);
     expect(caido.ok).toBe(false);
   });
+
+  it('acepta Instagram aunque mande a los robots a un login en círculo', async () => {
+    const destino = 'https://instagram.com/3d_cordoba';
+    const falla = () => {
+      throw new TypeError('fetch failed', { cause: new Error('redirect count exceeded') });
+    };
+    const circulo = await probarEnlace('https://qr-pasoapaso.vercel.app/q/ABC', destino, false, (async (url: string | URL | Request, init?: RequestInit) =>
+      String(url).includes('/q/') ? respuesta(302, destino) : init?.redirect === 'manual' ? respuesta(302, 'https://www.instagram.com/accounts/login/') : falla()) as typeof fetch);
+    expect(circulo.ok).toBe(true);
+    expect(circulo.nota).toContain('celular');
+
+    const cortado = await probarEnlace('https://qr-pasoapaso.vercel.app/q/ABC', destino, false, (async (url: string | URL | Request) =>
+      String(url).includes('/q/') ? respuesta(302, destino) : falla()) as typeof fetch);
+    expect(cortado.ok).toBe(true);
+
+    const otro = await probarEnlace('https://qr-pasoapaso.vercel.app/q/ABC', 'https://mi-sitio-caido.com', false, (async (url: string | URL | Request) =>
+      String(url).includes('/q/') ? respuesta(302, 'https://mi-sitio-caido.com') : falla()) as typeof fetch);
+    expect(otro.ok).toBe(false);
+    expect(otro.nota).toContain('redirect count exceeded');
+  });
 });
 
 describe('etapas por línea', () => {

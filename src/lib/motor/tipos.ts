@@ -39,6 +39,17 @@ export const PASOS_CON_IA: readonly TipoPaso[] = [
   'estructura',
 ];
 
+/** Pedrito solo usa IA cuando mira las ideas o la imagen; el arranque y los vistos buenos de Estructura y Producción son fijos. */
+const PEDRITO_CON_IA = ['ideas', 'diseno'];
+
+/** Si el paso va a gastar IA (para frenar por tope solo esos y no la última revisión de Producción con el QR ya activo). */
+export function gastaIA(tipo: TipoPaso, entrada: Json | null | undefined): boolean {
+  if (!PASOS_CON_IA.includes(tipo)) return false;
+  if (tipo !== 'pedrito') return true;
+  const revisar = entrada && typeof entrada === 'object' && !Array.isArray(entrada) ? (entrada as Record<string, unknown>).revisar : undefined;
+  return typeof revisar === 'string' && PEDRITO_CON_IA.includes(revisar);
+}
+
 export type TipoPrevia = 'elegir_concepto' | 'aprobar_final' | 'tope_gasto' | 'falta_dato' | 'fallo';
 export type EstadoPedido = 'en_marcha' | 'en_espera' | 'pausado' | 'listo' | 'fallido' | 'cancelado';
 export type Etapa =

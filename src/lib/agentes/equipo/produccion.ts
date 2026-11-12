@@ -70,6 +70,23 @@ export function evaluarQr(op: {
 
 const UA = 'FabricaDePlacas/1.0 (verificacion de enlace)';
 
+/** Sitios que no dejan entrar a los robots pero al celular le abren bien. */
+const REDES = /(^|\.)(instagram\.com|facebook\.com|fb\.com|tiktok\.com|wa\.me|whatsapp\.com|threads\.net|x\.com|twitter\.com)$/i;
+function esRedSocial(url: string) {
+  try {
+    return REDES.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** «fetch failed» solo no dice nada: se suma la causa (redirecciones de más, conexión cortada, etc.). */
+function motivoFetch(e: unknown) {
+  if (!(e instanceof Error)) return String(e);
+  const causa = (e as Error & { cause?: unknown }).cause;
+  return causa instanceof Error && causa.message !== e.message ? `${e.message} (${causa.message})` : e.message;
+}
+
 /** Prueba que el link del QR redirija al destino y que el destino abra. */
 export async function probarEnlace(urlDelQr: string, destino: string, simulado: boolean, f: typeof fetch = fetch): Promise<PruebaEnlace> {
   let qrStatus: number | null = null;
@@ -87,16 +104,27 @@ export async function probarEnlace(urlDelQr: string, destino: string, simulado: 
 
   let destinoStatus: number | null = null;
   let nota = '';
+  let cortaRobots = false;
   try {
     const r = await f(destino, { redirect: 'follow', headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12_000) });
     destinoStatus = r.status;
     await r.body?.cancel().catch(() => undefined);
   } catch (e) {
-    nota = `El destino no respondió: ${e instanceof Error ? e.message : String(e)}`;
+    // Instagram, Facebook y compañía mandan a los robots a un login que redirige en círculo, y el fetch
+    // siguiendo redirecciones falla («fetch failed»). Sin seguirlas, ver que el sitio responde alcanza.
+    try {
+      const r = await f(destino, { redirect: 'manual', headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(12_000) });
+      destinoStatus = r.status;
+      cortaRobots = r.status >= 300 && r.status < 400;
+      await r.body?.cancel().catch(() => undefined);
+    } catch {
+      if (esRedSocial(destino)) cortaRobots = true;
+      else nota = `El destino no respondió: ${motivoFetch(e)}`;
+    }
   }
   // Algunos sitios (Instagram, Google) frenan a los robots aunque al celular le abran bien.
-  const bloqueaRobots = destinoStatus === 401 || destinoStatus === 403 || destinoStatus === 429;
-  const destinoOk = destinoStatus !== null && (destinoStatus < 400 || bloqueaRobots);
+  const bloqueaRobots = cortaRobots || destinoStatus === 401 || destinoStatus === 403 || destinoStatus === 429;
+  const destinoOk = cortaRobots || (destinoStatus !== null && (destinoStatus < 400 || bloqueaRobots));
   if (!nota) {
     nota = [
       simulado
@@ -105,7 +133,7 @@ export async function probarEnlace(urlDelQr: string, destino: string, simulado: 
           ? `El QR redirige al destino (${qrStatus}).`
           : `El QR no redirige al destino: responde ${qrStatus}${location ? ` hacia ${location}` : ''}.`,
       destinoOk
-        ? `El destino abre (${destinoStatus}${bloqueaRobots ? ', bloquea robots: probalo con el celular' : ''}).`
+        ? `El destino abre (${destinoStatus ?? 'sin respuesta'}${bloqueaRobots ? ', bloquea robots: probalo con el celular' : ''}).`
         : `El destino no abre (${destinoStatus}).`,
     ].join(' ');
   }

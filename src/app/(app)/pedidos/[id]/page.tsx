@@ -159,7 +159,9 @@ export default async function Pedido({ params }: { params: Promise<{ id: string 
           <div className="section">
             <h3>Versiones</h3>
             {d.versiones.map((v) => {
-              const chequeo = v.chequeo as ChequeoSvg | null;
+              // Las versiones del equipo (Diseño con Gemini) guardan otro chequeo, sin errores ni avisos de SVG.
+              const crudo = v.chequeo as Partial<ChequeoSvg> | null;
+              const chequeo = crudo && Array.isArray(crudo.errores) && Array.isArray(crudo.avisos) ? (crudo as ChequeoSvg) : null;
               const rev = v.revision as { resumen?: string; veredicto?: string; puntajes?: Record<string, number>; problemas?: { gravedad: string; descripcion: string }[] } | null;
               return (
                 <div key={v.id} className="final" style={{ paddingBottom: 14, borderBottom: '1px dashed var(--line)' }}>
@@ -171,8 +173,15 @@ export default async function Pedido({ params }: { params: Promise<{ id: string 
                       <div className="tag">{v.origen === 'boceto' ? `Boceto ${v.numero}` : `Versión ${v.numero}`}{pedido.version_final_id === v.id ? ' · final' : ''}</div>
                       <div className="muted small">
                         {fecha(v.created_at)}
-                        {v.notas ? ` · ${v.notas}` : ''}
+                        {v.notas && v.origen !== 'diseno' ? ` · ${v.notas}` : ''}
                       </div>
+                      {/* En las versiones de Diseño las notas son el prompt entero de la imagen: va plegado. */}
+                      {v.notas && v.origen === 'diseno' && (
+                        <details>
+                          <summary className="small muted">Prompt de la imagen</summary>
+                          <p className="small mono" style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{v.notas}</p>
+                        </details>
+                      )}
                     </div>
                     {rev?.resumen && (
                       <p className="small">
