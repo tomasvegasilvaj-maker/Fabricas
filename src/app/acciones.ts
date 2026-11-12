@@ -17,6 +17,7 @@ import {
   pedirCambios,
   reanudarPedido,
   reintentarFallo,
+  darPorLista,
   rehacerConceptos,
   seguirConTope,
   seguirSinBoceto,
@@ -141,15 +142,19 @@ export async function responderPrevia(_: EstadoAccion, fd: FormData): Promise<Es
         break;
       case 'cambios':
         ok = await pedirCambios(previaId, { comentario: texto(fd, 'comentario'), recordar });
-        aviso = 'Cambios pedidos: vuelve a elaboración.';
+        aviso = 'Cambios pedidos: la placa se rehace con tu comentario.';
         break;
       case 'seguir_tope':
         ok = await seguirConTope(previaId);
         aviso = 'Tope subido: la fábrica sigue.';
         break;
       case 'reintentar':
-        ok = await reintentarFallo(previaId);
+        ok = await reintentarFallo(previaId, { destino: texto(fd, 'destino') });
         aviso = 'Se reintenta el paso.';
+        break;
+      case 'dar_por_lista':
+        ok = await darPorLista(previaId);
+        aviso = 'Placa dada por lista.';
         break;
       case 'seguir_sin_boceto':
         ok = await seguirSinBoceto(previaId);

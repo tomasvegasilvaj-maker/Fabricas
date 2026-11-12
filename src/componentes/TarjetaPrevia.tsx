@@ -235,16 +235,42 @@ function AprobarFinal({ previa, d, version }: { previa: PreviaRow; d: Datos; ver
 }
 
 function Fallo({ previa, d, paso }: { previa: PreviaRow; d: Datos; paso: PasoRow | null }) {
+  const produccion = d.tipo === 'produccion';
+  const destino = produccion ? String((paso?.entrada as { destino?: string } | null)?.destino ?? '') : '';
   return (
     <>
       {paso?.error && <p className="mono small" style={{ whiteSpace: 'pre-wrap' }}>{paso.error}</p>}
-      <div className="acts">
-        <FormAccion accion={responderPrevia}>
+      {produccion && (
+        <FormAccion accion={responderPrevia} className="grid">
           <Oculto previa={previa} accion="reintentar" />
-          <BotonEnviar clase="btn accent" pendiente="Reintentando…">
-            Reintentar
-          </BotonEnviar>
+          <label className="campo">
+            Link de destino <small>Si estaba mal, corregilo: el QR del pedido se reapunta al link nuevo y Producción vuelve a armar y probar todo.</small>
+            <input type="url" name="destino" defaultValue={destino} placeholder="https://..." required />
+          </label>
+          <div className="acts">
+            <BotonEnviar clase="btn accent" pendiente="Reintentando…">
+              Reintentar con este link
+            </BotonEnviar>
+          </div>
         </FormAccion>
+      )}
+      <div className="acts">
+        {!produccion && (
+          <FormAccion accion={responderPrevia}>
+            <Oculto previa={previa} accion="reintentar" />
+            <BotonEnviar clase="btn accent" pendiente="Reintentando…">
+              Reintentar
+            </BotonEnviar>
+          </FormAccion>
+        )}
+        {produccion && paso?.estado === 'hecho' && (
+          <FormAccion accion={responderPrevia}>
+            <Oculto previa={previa} accion="dar_por_lista" />
+            <BotonEnviar clase="btn ghost" pendiente="Guardando…">
+              Lo probé con el celular y abre: darla por lista
+            </BotonEnviar>
+          </FormAccion>
+        )}
         {d.tipo === 'boceto' && (
           <FormAccion accion={responderPrevia}>
             <Oculto previa={previa} accion="seguir_sin_boceto" />

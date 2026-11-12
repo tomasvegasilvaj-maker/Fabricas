@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 import { imagen, llamarClaude, texto } from '../../ia/claude';
@@ -95,8 +96,15 @@ export function crearEstructura(mirar: Mirador): Agente {
   };
 }
 
+/**
+ * La imagen de Gemini en 2K puede pasar los 5 MB que acepta Claude por imagen (y Claude igual la achica a ~1568 px):
+ * se manda como JPG de 1500 px de alto como mucho.
+ */
+export async function imagenParaClaude(datos: Buffer): Promise<Buffer> {
+  return sharp(datos).rotate().resize({ width: 1500, height: 1500, fit: 'inside', withoutEnlargement: true }).flatten({ background: '#FFFFFF' }).jpeg({ quality: 85 }).toBuffer();
+}
+
 export const estructuraEquipo = crearEstructura(async (ctx, op) => {
-  const mime = (['image/png', 'image/jpeg', 'image/webp'].includes(op.imagenMime) ? op.imagenMime : 'image/png') as 'image/png' | 'image/jpeg' | 'image/webp';
   const r = await llamarClaude({
     ctx: ctx.ia,
     etiqueta: 'verificación de la plantilla',
@@ -105,7 +113,7 @@ export const estructuraEquipo = crearEstructura(async (ctx, op) => {
       texto('Placa armada con la plantilla (el QR es de muestra):'),
       imagen(op.vista, 'image/png'),
       texto('Imagen de fondo sola, como la generó Diseño:'),
-      imagen(op.imagen, mime),
+      imagen(await imagenParaClaude(op.imagen), 'image/jpeg'),
       texto(`El pie tiene que decir: «${op.pie}».\n\n${op.correccion}`.trim()),
     ],
     esfuerzo: ctx.esfuerzo('low'),
